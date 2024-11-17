@@ -29,6 +29,7 @@ my ($mkv1, $mkv2) = split /\./, $mkver[2];
 
 $valid_mk or die "Unsupported version of make found: $mk\n";
 
+# 存储所有的 feed 配置，对应 feed 的配置文件
 my @feeds;
 my %build_packages;
 my %installed;
@@ -48,23 +49,32 @@ sub parse_file($$) {
 	my $line = 0;
 	my $fh;
 
+	# 打开文件
 	open $fh, $fname or return undef;
 	while (<$fh>) {
+		# 移除行尾的换行符
 		chomp;
+		# 移除注释
 		s/#.+$//;
 		$line++;
+		# 行为空则跳过
 		next unless /\S/;
 
+		# 正则提取行内容，完整结构应该是 src-git --branch=master example http://example.com/repo.git
 		my ($type, $flags, $name, $urls) = m!^src-([\w\-]+)((?:\s+--\w+(?:=\S+)?)*)\s+(\w+)(?:\s+(\S.*))?$!;
+		# 必填校验
 		unless ($type && $name) {
 			die "Syntax error in $fname, line $line\n";
 		}
 
+		# 重复校验
 		if ($existing->{$name}++) {
 			die "Duplicate feed name '$name' in '$fname' line: $line\n";
 		}
 
+		# 拆分多个 url
 		my @src = defined($urls) ? split /\s+/, $urls : ();
+		# 如果没有 url，则添加一个空字符串
 		push @src, '' if @src == 0;
 
 		my %flags;
@@ -74,12 +84,14 @@ sub parse_file($$) {
 			}
 		}
 
+		# 如果是 include 规则，进行递归解析
 		if ($type eq "include") {
 			parse_file($urls, $existing) or
 			    die "Unable to open included file '$urls'";
 			next;
 		}
 
+		# 将元素添加到 feeds 数组中
 		push @feeds, ["src-$type", $name, \@src, \%flags];
 	}
 	close $fh;
@@ -127,7 +139,11 @@ sub update_index($)
 	-d "./feeds/$name.tmp" or mkdir "./feeds/$name.tmp" or return 1;
 	-d "./feeds/$name.tmp/info" or mkdir "./feeds/$name.tmp/info" or return 1;
 
+	# 这个在根目录执行，所以直接用的是 openwrt/Makefile
+	# 检查环境(检查的时候，会将很多bin软链到 staging_dir/host/bin)，编译了两个工具
 	system("$mk -s prepare-mk OPENWRT_BUILD= TMP_DIR=\"$ENV{TOPDIR}/feeds/$name.tmp\"");
+	# 通过 -f 指定了 makefile 文件
+	# make 命令行中的变量优先级是比 Makefile 中的高
 	system("$mk -s -f include/scan.mk IS_TTY=1 SCAN_TARGET=\"packageinfo\" SCAN_DIR=\"feeds/$name\" SCAN_NAME=\"package\" SCAN_DEPTH=5 SCAN_EXTRA=\"\" TMP_DIR=\"$ENV{TOPDIR}/feeds/$name.tmp\"");
 	system("$mk -s -f include/scan.mk IS_TTY=1 SCAN_TARGET=\"targetinfo\" SCAN_DIR=\"feeds/$name\" SCAN_NAME=\"target\" SCAN_DEPTH=5 SCAN_EXTRA=\"\" SCAN_MAKEOPTS=\"TARGET_BUILD=1\" TMP_DIR=\"$ENV{TOPDIR}/feeds/$name.tmp\"");
 	system("ln -sf $name.tmp/.packageinfo ./feeds/$name.index");
@@ -136,6 +152,7 @@ sub update_index($)
 	return 0;
 }
 
+# 定义了所有的类型
 my %update_method = (
 	'src-svn' => {
 		'init'		=> "svn checkout '%s' '%s'",
@@ -281,6 +298,7 @@ sub get_feed($) {
 
 sub get_installed() {
 	system("$mk -s prepare-tmpinfo OPENWRT_BUILD=");
+	# 重置内存数据
 	clear_packages();
 	parse_package_metadata("./tmp/.packageinfo");
 	%installed_pkg = %vpackage;
@@ -697,6 +715,7 @@ sub install {
 		return 0;
 	}
 
+	# 解析 package 和 target 数据，写到变量中
 	get_installed();
 
 	foreach my $f (@feeds) {
@@ -793,6 +812,7 @@ sub uninstall {
 	return 0;
 }
 
+# 更新 feed，拉取仓库
 sub update_feed($$$$$$)
 {
 	my $type=shift;
@@ -807,12 +827,14 @@ sub update_feed($$$$$$)
 	if( $force_relocate ) {
 		warn "Source of feed $name has changed, replacing copy\n";
 	}
+	# 检查类型是否合法
 	$update_method{$type} or do {
 		warn "Unknown type '$type' in feed $name\n";
 		return 1;
 	};
 
 	my $failed = 1;
+	# 遍历 src 进行更新
 	foreach my $feedsrc (@$src) {
 		warn "Updating feed '$name' from '$feedsrc' ...\n";
 		if (update_feed_via($type, $name, $feedsrc, $force_relocate, $force_update, $rebase_update, $stash_update) != 0) {
@@ -838,10 +860,13 @@ sub update {
 	my %argv_feeds;
 	my $failed=0;
 
+	# 将环境变量 SCAN_COOKIE 设置为 进程ID
 	$ENV{SCAN_COOKIE} = $$;
 	$ENV{OPENWRT_VERBOSE} = 's';
 
+	# 内置函数，解析命令行参数
 	getopts('ahifrs', \%opts);
+	# 将参数数组转换为哈希表
 	%argv_feeds = map { $_ => 1 } @ARGV;
 
 	if ($opts{h}) {
@@ -858,9 +883,12 @@ sub update {
 			mkdir "feeds" or die "Unable to create the feeds directory";
 		};
 
+	# 存储需要被索引的feed
 	my @index_feeds;
 	foreach my $feed (@feeds) {
 		my ($type, $name, $src) = @$feed;
+		# $#ARGV == -1 是检查数组是否为空，$#ARGV 是数组的最后一个元素的索引
+		# $argv_feeds{$name} 是检查 $name 是否在用户输入的name中
 		next unless $#ARGV == -1 or $opts{a} or $argv_feeds{$name};
 		if (not $opts{i}) {
 			update_feed($type, $name, $src, $opts{f}, $opts{r}, $opts{s}) == 0 or $failed=1;
@@ -880,6 +908,7 @@ sub update {
 	return $failed;
 }
 
+# 会被 prepare-tmpinfo 调用，用来生成 tmp/.config-feeds.in 文件
 sub feed_config() {
 	foreach my $feed (@feeds) {
 		my $installed = (-f "feeds/$feed->[1].index");
