@@ -53,6 +53,7 @@ SOURCE_INFO :=
 endef
 
 dumpinfo: FORCE
+	# SOURCE_INFO 会被展开执行
 	$(if $(SOURCE_INFO),$(info $(SOURCE_INFO)))
 
 endif

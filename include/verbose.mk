@@ -2,6 +2,8 @@
 #
 # Copyright (C) 2006-2020 OpenWrt.org
 
+# 这个应该是处理日志级别的，输出的内容不一样多，主要是 make 的 V 参数
+
 ifndef OPENWRT_VERBOSE
   OPENWRT_VERBOSE:=
 endif

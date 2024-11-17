@@ -41,7 +41,8 @@ timestamp='2024-07-27'
 # even some reasonably current systems (Solaris 10 as case-in-point) still
 # have a pre-POSIX /bin/sh.
 
-
+# 仅保留最后一个 / 之后的内容
+# /home/user/project/file.txt -> file.txt
 me=`echo "$0" | sed -e 's,.*/,,'`
 
 usage="\

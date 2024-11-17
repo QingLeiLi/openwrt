@@ -15,6 +15,7 @@ PKG_MIRROR_HASH:=bbc5622bc03e3b43116fcc86e3fa2d2372bfc07b3a00d2b3a6efac4f7454a40
 PKG_MAINTAINER:=Jo-Philipp Wich <jo@mein.io>
 PKG_LICENSE:=ISC
 
+# 引入 package.mk，其第一个目标会被执行
 include $(INCLUDE_DIR)/package.mk
 
 define Package/firewall4

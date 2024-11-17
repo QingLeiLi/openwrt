@@ -5,6 +5,7 @@ export LC_ALL=C
 
 GET_REV=$1
 
+# 尝试从 version 文件读取
 try_version() {
 	[ -f version ] || return 1
 	REV="$(cat version)"

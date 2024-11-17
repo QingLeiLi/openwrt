@@ -10,6 +10,8 @@
 # r: show autorebuild messages
 # v: verbose (no .SILENCE for common targets)
 
+# 定义了几个 debug 用的宏
+
 ifeq ($(DUMP),)
   ifeq ($(DEBUG),all)
     build_debug:=dltvr
@@ -21,6 +23,7 @@ endif
 ifneq ($(DEBUG),)
 
 define debug
+# make中 $ 用于引用变量，如果需要原始的 $，则用 $$ 表示
 $$(findstring $(2),$$(if $$(DEBUG_SCOPE_DIR),$$(if $$(filter $$(DEBUG_SCOPE_DIR)%,$(1)),$(build_debug)),$(build_debug)))
 endef
 

@@ -293,6 +293,7 @@ define DownloadMethod/darcs
 	)
 endef
 
+# 定义每个下载方式的必填字段
 Validate/cvs=SOURCE_VERSION SUBDIR
 Validate/svn=SOURCE_VERSION SUBDIR
 Validate/git=SOURCE_VERSION SUBDIR
@@ -300,6 +301,7 @@ Validate/bzr=SOURCE_VERSION SUBDIR
 Validate/hg=SOURCE_VERSION SUBDIR
 Validate/darcs=SOURCE_VERSION SUBDIR
 
+# 是用于所有包的默认值
 define Download/Defaults
   URL:=
   FILE:=
@@ -316,6 +318,7 @@ define Download/Defaults
   SUBMODULES:=
 endef
 
+# 试用于当前包的值
 define Download/default
   FILE:=$(PKG_SOURCE)
   URL:=$(PKG_SOURCE_URL)
@@ -334,6 +337,8 @@ endef
 define Download
   $(eval $(Download/Defaults))
   $(eval $(Download/$(1)))
+  # FIELD 是foreach的循环变量，后面的 URL、FILE 才是要循环的变量列表
+  # Validate/git 是一个变量，定义了各自的下载协议的必填字段
   $(foreach FIELD,URL FILE $(Validate/$(call dl_method,$(URL),$(PROTO))),
     ifeq ($($(FIELD)),)
       $$(error Download/$(1) is missing the $(FIELD) field.)

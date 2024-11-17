@@ -2,7 +2,9 @@
 #
 # Copyright (C) 2007 OpenWrt.org
 
+# CURDIR是make的内嵌变量， 为当前目录
 TOPDIR:=${CURDIR}
+# https://unix.stackexchange.com/a/87748
 LC_ALL:=C
 LANG:=C
 TZ:=UTC
@@ -14,12 +16,22 @@ $(if $(findstring $(space),$(TOPDIR)),$(error ERROR: The path to the OpenWrt dir
 
 world:
 
+# grep -e 表示是正则，满足任一 -e 条件的才会被打印出来
+# ➜ echo "test1111\ntest2222\ntest3333\ntest444" | grep -e "test2" -e "test4"
+# test2222
+# test444
+# -m 指定输出的次数，这里只要第一个
+
+# 找到 pkg-config 所在的文件夹
 DISTRO_PKG_CONFIG:=$(shell $(TOPDIR)/scripts/command_all.sh pkg-config | grep -e '/usr' -e '/nix/store' -m 1)
 
+# 保存原始的PATH值
 export ORIG_PATH:=$(if $(ORIG_PATH),$(ORIG_PATH),$(PATH))
+# 将 OP自身的工具链加到PATH里面
 export PATH:=$(if $(STAGING_DIR),$(abspath $(STAGING_DIR)/../host/bin),$(TOPDIR)/staging_dir/host/bin):$(PATH)
 
 ifneq ($(OPENWRT_BUILD),1)
+  # 清空make的 flag
   _SINGLE=export MAKEFLAGS=$(space);
 
   override OPENWRT_BUILD=1

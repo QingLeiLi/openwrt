@@ -4,6 +4,7 @@
 
 __package_mk:=1
 
+# dumpinfo目标定义在：openwrt/include/package-dumpinfo.mk
 all: $(if $(DUMP),dumpinfo,$(if $(CHECK),check,compile))
 
 include $(INCLUDE_DIR)/download.mk
@@ -207,6 +208,7 @@ define Build/CoreTargets
   STAMP_PREPARED:=$$(STAMP_PREPARED)
   STAMP_CONFIGURED:=$$(STAMP_CONFIGURED)
 
+  # QUILT 是管理 patch 的
   $(if $(QUILT),$(Build/Quilt))
   $(call Build/Autoclean)
   $(call DefaultTargets)
@@ -292,6 +294,8 @@ define Build/CoreTargets
 endef
 
 define Build/DefaultTargets
+  # strip 用于移除字符串中所有的空格
+  # 这里只是定义了目标，但是没有真正执行下载
   $(if $(PKG_SKIP_DOWNLOAD),,$(if $(strip $(PKG_SOURCE_URL)),$(call Download,default)))
   $(if $(DUMP),,$(Build/CoreTargets))
 
@@ -301,6 +305,7 @@ endef
 
 define BuildPackage
   $(eval $(Package/Default))
+  # 执行包自定义的目标，进行变量覆盖
   $(eval $(Package/$(1)))
 
 ifdef DESCRIPTION
@@ -316,6 +321,7 @@ endif
   BUILD_PACKAGES += $(1)
   $(STAMP_PREPARED): $$(if $(QUILT)$(DUMP),,$(call find_library_dependencies,$(1)))
 
+  # 必填校验
   $(foreach FIELD, TITLE CATEGORY SECTION VERSION,
     ifeq ($($(FIELD)),)
       $$(error Package/$(1) is missing the $(FIELD) field)
@@ -323,6 +329,7 @@ endif
   )
 
   $(if $(DUMP), \
+	# 在这里执行的 Dumpinfo/Package
     $(if $(CHECK),,$(Dumpinfo/Package)), \
     $(foreach target, \
       $(if $(Package/$(1)/targets),$(Package/$(1)/targets), \

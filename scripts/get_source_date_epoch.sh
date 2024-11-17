@@ -6,6 +6,7 @@ if [ -n "$TOPDIR" ]; then
 	cd "$TOPDIR" || exit 1
 fi
 
+# :- 是参数拓展运算符，如果 $1 为空，则使用 . 作为默认值
 SOURCE="${1:-.}"
 
 try_version() {

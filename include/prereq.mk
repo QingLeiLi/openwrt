@@ -23,11 +23,14 @@ PREREQ_PREV=
 # 2: error message
 define Require
   export PREREQ_CHECK=1
+  # 重复校验
   ifeq ($$(CHECK_$(1)),)
     prereq: prereq-$(1)
 
     prereq-$(1): $(if $(PREREQ_PREV),prereq-$(PREREQ_PREV)) FORCE
 		printf "Checking '$(1)'... "
+		# MAKEFILE_LIST 是内置变量，包含了所以解析的 makefile 文件
+		# firstword 是获取第一个元素
 		if $(NO_TRACE_MAKE) -f $(firstword $(MAKEFILE_LIST)) check-$(1) PATH="$(ORIG_PATH)" >/dev/null 2>/dev/null; then \
 			echo 'ok.'; \
 		elif $(NO_TRACE_MAKE) -f $(firstword $(MAKEFILE_LIST)) check-$(1) PATH="$(ORIG_PATH)" >/dev/null 2>/dev/null; then \

@@ -7,7 +7,7 @@ include $(INCLUDE_DIR)/prereq.mk
 
 SHELL:=sh
 PKG_NAME:=Build dependency
-
+# 定义 Require/true、check-true、prereq-true 目标，并声明 prereq 依赖 prereq-true
 $(eval $(call TestHostCommand,true, \
 	Please install GNU 'coreutils', \
 	$(TRUE)))
@@ -231,10 +231,18 @@ ifeq ($(HOST_OS),Linux)
 endif
 
 $(STAGING_DIR_HOST)/bin/mkhash: $(SCRIPT_DIR)/mkhash.c
+	# $@ 代表当前目标的完整名称
+	# $(dir $@) 则提取出该目标的目录部分
 	mkdir -p $(dir $@)
+	# -O2 表示编译优化级别为 2
+	# -I$(TOPDIR)/tools/include 表示包含的头文件
+	# -o $@ 指定输出文件
+	# $<：Makefile的自动变量，表示第一个依赖文件，即 mkhash.c
 	$(CC) -O2 -I$(TOPDIR)/tools/include -o $@ $<
 
 $(STAGING_DIR_HOST)/bin/xxd: $(SCRIPT_DIR)/xxdi.pl
+	# $<：表示第一个依赖文件（通常是源文件）
+	# $@：表示当前目标的名字
 	$(LN) $< $@
 
 prereq: $(STAGING_DIR_HOST)/bin/mkhash $(STAGING_DIR_HOST)/bin/xxd

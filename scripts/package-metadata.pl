@@ -396,13 +396,20 @@ sub gen_package_mk() {
 	my $line;
 
 	parse_package_metadata($ARGV[0]) or exit 1;
+	# 这是基础的foreach：foreach my $srcname keys %srcpackage)
+	# uc：将字符串转换为大写
+	# cmp：字符串比较
+	# 整体是将 srcpackage 的 key 按照字母顺序排序
 	foreach my $srcname (sort {uc($a) cmp uc($b)} keys %srcpackage) {
 		my $src = $srcpackage{$srcname};
 		my $variant_default;
 		my %deplines = ('' => {});
 
+		# 遍历 src 的 packages，每个src对应多个包
+		# 这里的src其实对应一个 makefile，每个 makefile 可以定义多个包
 		foreach my $pkg (@{$src->{packages}}) {
 			foreach my $dep (@{$pkg->{depends}}) {
+				# @@ 是段落的结束符，遇到 @ 就可以不处理了
 				next if ($dep =~ /@/);
 
 				my $condition;
@@ -421,6 +428,8 @@ sub gen_package_mk() {
 				}
 
 				# Filter out self-depends
+				# grep 会遍历 vpkg_dep 这个数组，找到 srcname 不等于 $_->{src}{name} 的元素
+				# $_ 代表当前遍历的元素
 				my @vdeps = grep { $srcname ne $_->{src}{name} } @{$vpkg_dep};
 
 				foreach my $vdep (@vdeps) {
