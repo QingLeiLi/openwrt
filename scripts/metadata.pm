@@ -196,6 +196,7 @@ sub clear_packages() {
 	%groupnames = ();
 }
 
+# 将文本的包信息解析到内存
 sub parse_package_metadata($) {
 	my $file = shift;
 	my $pkg;

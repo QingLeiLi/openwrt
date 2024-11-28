@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # Copyright (C) 2006-2020 OpenWrt.org
+# 这整个文件是处理构建依赖的，包括检查环境、链接依赖库
+# prereq.mk 类似于 utils 库
 
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/prereq.mk
@@ -245,6 +247,9 @@ $(STAGING_DIR_HOST)/bin/xxd: $(SCRIPT_DIR)/xxdi.pl
 	# $@：表示当前目标的名字
 	$(LN) $< $@
 
+# 这是一个大的阶段，所有的前置的环境检查，都需要在 prereq 阶段执行
+# 上面的 TestHostCommand，SetupHostCommand，RequireCHeader 都注册为了 prereq 的依赖，保证可以在 prereq 执行的时候执行
+# 这部分就是 检查了很多环境、链接很多库到 $(STAGING_DIR_HOST)/bin 下面
 prereq: $(STAGING_DIR_HOST)/bin/mkhash $(STAGING_DIR_HOST)/bin/xxd
 
 # Install ldconfig stub

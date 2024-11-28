@@ -25,6 +25,8 @@ export TMPDIR:=$(TMP_DIR)
 #
 # @param 1: String.
 ##
+# $(subst ",,$(1))：将字符串中的 " 替换为空
+# strip：去除字符串两端的空格
 qstrip=$(strip $(subst ",,$(1)))
 #"))
 
@@ -32,24 +34,37 @@ empty:=
 space:= $(empty) $(empty)
 comma:=,
 pound:=\#
-##@
+
+##@ 移除字符串中的空格，一些命令用空格区分多个参数，移除空格就是合并参数了
 # @brief Merge strings by removing spaces.
 #
 # @param 1: String.
 ##
 merge=$(subst $(space),,$(1))
-##@
+##@ 计算参数列表的hash
 # @brief Get hash sum of variable list.
 #
 # @param 1: List of variable names.
 ##
+# 遍历传入的参数名列表，每个参数生成字符串：VAR1=value1，value中的单引号替换为转义的单引号
+# 所有变量拼接位完整字符串：VAR1=value1 VAR2=value2
+# 计算上述字符串的md5
 confvar=$(shell echo '$(foreach v,$(1),$(v)=$(subst ','\'',$($(v))))' | $(MKHASH) md5)
-##@
+##@ 移除文件的拓展名
 # @brief Strip last extension from file name.
 #
 # @param 1: File name.
 ##
-strip_last=$(patsubst %.$(lastword $(subst .,$(space),$(1))),%,$(1))
+strip_last=$(
+  # 匹配 %.ext，将文件名匹配出来
+  patsubst %.$(
+    # 以空格分割，获取最后一个字符，这里得到的就是文件的拓展名
+    lastword $(
+      # 将 . 替换为空格
+      subst .,$(space),$(1)
+    )
+  ),%,$(1)
+)
 
 paren_left = (
 paren_right = )
@@ -65,17 +80,52 @@ define newline
 
 endef
 
-__tr_list = $(join $(join $(1),$(foreach char,$(1),$(comma))),$(2))
-__tr_head_stripped = $(subst $(space),,$(foreach cv,$(call __tr_list,$(1),$(2)),$$$(paren_left)subst$(cv)$(comma)))
+# 这个核心是产出 subst 替换函数的参数的，用于下面的大小写转换
+# 输入：a b c,A B C
+# 输出：a,A b,B c,C
+__tr_list = $(
+  # a, b, c, 与 A B C 进行join，得到 a,A b,B c,C
+  join $(
+    # 在$1每个参数后面添加逗号，得到 a, b, c,
+    join $(1),$(
+      # comma 是逗号，生成 $1 相同个数的逗号
+      foreach char,$(1),$(comma)
+    )
+  ),$(2)
+)
+
+# 对生成参数拼接得到 subst 的嵌套调用
+__tr_head_stripped = $(
+  # 替换空格为空，得到：$(substa,A,$(substb,B,$(substc,C,
+  subst $(space),,$(
+    # 循环后得到 $(substa,A, $(substb,B, $(substc,C,
+    foreach cv,$(
+      # 生成参数对 a,A b,B c,C
+      call __tr_list,$(1),$(2)
+      # 拼接字符串得到 $(substa,A,
+    ),$$$(paren_left)subst$(cv)$(comma)
+  )
+)
+# 在 (subst 后面加一个空格，得到 $(subst a,A,$(subst b,B,$(subst c,C,
+# 将 __tr_head_stripped 里面 (subst 替换为 (subst+空格，得到的是 $(subst a,1,
 __tr_head = $(subst $(paren_left)subst,$(paren_left)subst$(space),$(__tr_head_stripped))
-__tr_tail = $(subst $(space),,$(foreach cv,$(1),$(paren_right)))
+
+# 生成 $(1) 个没有空格的右括号
+__tr_tail = $(subst $(space),,$(
+  # 生成 $(1) 个右括号
+  foreach cv,$(1),$(paren_right)
+))
+
+# 拼接字符串，得到一一映射的转换函数
+# $1 和 $2 是等长的list，函数作用是一一映射
+# $(subst a,A,$(subst b,B,$(subst c,C,)))
 __tr_template = $(__tr_head)$$(1)$(__tr_tail)
 
-##@
+##@小写转大写
 # @brief Convert string characters to upper.
 ##
 $(eval toupper = $(call __tr_template,$(chars_lower),$(chars_upper)))
-##@
+##@ 大写转小写
 # @brief Convert string characters to lower.
 ##
 $(eval tolower = $(call __tr_template,$(chars_upper),$(chars_lower)))
@@ -83,10 +133,17 @@ $(eval tolower = $(call __tr_template,$(chars_upper),$(chars_lower)))
 ##@
 # @brief Abbreviate version. Truncate to 8 characters.
 ##
-version_abbrev = $(if $(if $(CHECK),,$(DUMP)),$(1),$(shell printf '%.8s' $(1)))
+version_abbrev = $(
+  if $(
+    if $(CHECK),,$(DUMP)
+  ),$(1),$(
+    shell printf '%.8s' $(1)
+  )
+)
 
 _SINGLE=export MAKEFLAGS=$(space);
 CFLAGS:=
+# 没看懂这个映射关系
 ARCH:=$(subst i486,i386,$(subst i586,i386,$(subst i686,i386,$(call qstrip,$(CONFIG_ARCH)))))
 ARCH_PACKAGES:=$(call qstrip,$(CONFIG_TARGET_ARCH_PACKAGES))
 BOARD:=$(call qstrip,$(CONFIG_TARGET_BOARD))
@@ -94,15 +151,20 @@ SUBTARGET:=$(call qstrip,$(CONFIG_TARGET_SUBTARGET))
 TARGET_OPTIMIZATION:=$(call qstrip,$(CONFIG_TARGET_OPTIMIZATION))
 TARGET_SUFFIX=$(call qstrip,$(CONFIG_TARGET_SUFFIX))
 BUILD_SUFFIX:=$(call qstrip,$(CONFIG_BUILD_SUFFIX))
+
+# CURDIR  是makefile所在的目录
 SUBDIR:=$(patsubst $(TOPDIR)/%,%,${CURDIR})
 BUILD_SUBDIR:=$(patsubst $(TOPDIR)/%,%,${CURDIR})
+# 获取核心数，使用了两种方式兼容
 NPROC:=$(shell sysctl -n hw.ncpu 2>/dev/null || nproc)
 export SHELL:=/usr/bin/env bash
 
+# 如果makefile的路径中包含 package/，则认为是包的build
 IS_PACKAGE_BUILD := $(if $(filter package/%,$(BUILD_SUBDIR)),1)
 
 OPTIMIZE_FOR_CPU=$(subst i386,i486,$(ARCH))
 
+# 如果 ARCH 不是 aarch64 aarch64_be powerpc ，用 fPIC，否则 fpic
 ifneq (,$(findstring $(ARCH) , aarch64 aarch64_be powerpc ))
   FPIC:=-DPIC -fPIC
 else
@@ -114,6 +176,7 @@ HOST_FPIC:=-DPIC -fPIC
 ARCH_SUFFIX:=$(call qstrip,$(CONFIG_CPU_TYPE))
 GCC_ARCH:=
 
+# 如果不为空就加一个下划线前缀
 ifneq ($(ARCH_SUFFIX),)
   ARCH_SUFFIX:=_$(ARCH_SUFFIX)
 endif
@@ -146,8 +209,26 @@ $(foreach t,$(DEFAULT_SUBDIR_TARGETS) $(1),
 )
 endef
 
-DL_DIR=$(if $(call qstrip,$(CONFIG_DOWNLOAD_FOLDER)),$(call qstrip,$(CONFIG_DOWNLOAD_FOLDER)),$(TOPDIR)/dl)$(if $(DL_SUBDIR),/$(DL_SUBDIR))
-OUTPUT_DIR:=$(if $(call qstrip,$(CONFIG_BINARY_FOLDER)),$(call qstrip,$(CONFIG_BINARY_FOLDER)),$(TOPDIR)/bin)
+# 下载文件夹
+# 有 CONFIG_DOWNLOAD_FOLDER，则直接使用
+# 否则使用 $(TOPDIR)/dl/
+
+# 如果指定了 DL_SUBDIR，则在后面再追加 ${DL_SUBDIR}
+# 这个没有使用 :=，是延迟推倒的，可以在后面指定相应的变量
+DL_DIR=$(if
+  $(call qstrip,$(CONFIG_DOWNLOAD_FOLDER)),
+  $(call qstrip,$(CONFIG_DOWNLOAD_FOLDER)),
+  $(TOPDIR)/dl
+)$(if $(DL_SUBDIR),/$(DL_SUBDIR))
+
+# 输出文件夹，优先使用 CONFIG_BINARY_FOLDER，默认 $(TOPDIR)/bin
+# 这里输出的应该是固件
+OUTPUT_DIR:=$(if
+  $(call qstrip,$(CONFIG_BINARY_FOLDER)),
+  $(call qstrip,$(CONFIG_BINARY_FOLDER)),
+  $(TOPDIR)/bin
+)
+# 生成固件的目录
 BIN_DIR:=$(OUTPUT_DIR)/targets/$(BOARD)/$(SUBTARGET)
 INCLUDE_DIR:=$(TOPDIR)/include
 SCRIPT_DIR:=$(TOPDIR)/scripts
@@ -204,8 +285,21 @@ TARGET_CXXFLAGS = $(TARGET_CFLAGS)
 TARGET_ASFLAGS_DEFAULT = $(TARGET_CFLAGS)
 TARGET_ASFLAGS = $(TARGET_ASFLAGS_DEFAULT)
 ifneq ($(CONFIG_EXTERNAL_TOOLCHAIN),)
-LIBGCC_S_PATH=$(realpath $(wildcard $(call qstrip,$(CONFIG_LIBGCC_ROOT_DIR))/$(call qstrip,$(CONFIG_LIBGCC_FILE_SPEC))))
-LIBGCC_S=$(if $(LIBGCC_S_PATH),-L$(dir $(LIBGCC_S_PATH)) -lgcc_s)
+
+# Library GCC Shared Path，链接共享库的路径
+# realpath 将相对路径转为绝对路径，并跟随符号解析到真正的文件
+LIBGCC_S_PATH=$(realpath
+  # 使用 wildcard，可能是因为 CONFIG_LIBGCC_ROOT_DIR 或 CONFIG_LIBGCC_FILE_SPEC 包含匹配，需要转为真正的路径
+  $(wildcard $(
+    call qstrip,$(CONFIG_LIBGCC_ROOT_DIR)
+  )/$(call qstrip,$(CONFIG_LIBGCC_FILE_SPEC))))
+
+# Library GCC Shared，链接共享库
+LIBGCC_S=$(if
+  $(LIBGCC_S_PATH),
+  -L$(dir $(LIBGCC_S_PATH)) -lgcc_s
+)
+# Library GCC Archive，表示gcc的静态库（archive library）
 LIBGCC_A=$(realpath $(lastword $(wildcard $(dir $(LIBGCC_S_PATH))/gcc/*/*/libgcc.a)))
 else
 LIBGCC_A=$(lastword $(wildcard $(TOOLCHAIN_DIR)/lib/gcc/*/*/libgcc.a))
@@ -337,6 +431,7 @@ export TARGET_CXX_NOCACHE
 export HOSTCC_NOCACHE
 export HOSTCXX_NOCACHE
 
+# 使用 ccache 对编译结果进行缓存
 ifneq ($(CONFIG_CCACHE),)
   TARGET_CC:= ccache $(TARGET_CC)
   TARGET_CXX:= ccache $(TARGET_CXX)
@@ -378,6 +473,7 @@ else
 		$(if $(PKG_BUILD_ID),KEEP_BUILD_ID=1) \
 		$(if $(CONFIG_KERNEL_KALLSYMS),NO_RENAME=1) \
 		$(if $(CONFIG_KERNEL_PROFILING),KEEP_SYMBOLS=1); \
+    # nm 用于列出目标文件的符号表
     NM="$(TARGET_CROSS)nm" \
     STRIP="$(STRIP)" \
     STRIP_KMOD="$(SCRIPT_DIR)/strip-kmod.sh" \
@@ -405,16 +501,18 @@ endif
 
 export BISON_PKGDATADIR:=$(STAGING_DIR_HOST)/share/bison
 export HOST_GNULIB_SRCDIR:=$(STAGING_DIR_HOST)/share/gnulib
+# 宏处理器，通常用于生成文本文件
 export M4:=$(STAGING_DIR_HOST)/bin/m4
 
-##@
+##@ 将字符串中的 .-/ 替换为 _，貌似是根据输出生成一个变量名，前缀 V_ 是为了确保变量名是合法的，避免输入是数字开头的
 # @brief Slugify variable name and prepend suffix.
 ##
 define shvar
 V_$(subst .,_,$(subst -,_,$(subst /,_,$(1))))
 endef
 
-##@
+##@ 将输入转为变量，并 export 出去
+# call shexport, a/b，会得到  export V_a_b=a/b
 # @brief Create and export variable, set to function result.
 #
 # @param 1: Function name. Used as variable name, prepended with `V_`.
@@ -423,7 +521,7 @@ define shexport
 export $(call shvar,$(1))=$$(call $(1))
 endef
 
-##@
+##@ 检查 host 是否支持64位的时间
 # @brief Support 64 bit tine in C code.
 #
 # Test support for 64-bit time with C code from largefile.m4 provided by GNU Gnulib
@@ -440,7 +538,7 @@ $(shell \
 )
 endef
 
-##@
+##@ 检查是否支持 flock，并兜底
 # @brief Execute commands under flock
 #
 # @param 1: The shell expression.
@@ -458,7 +556,7 @@ else
 endif
 
 
-##@
+##@ 将 $1 拷贝到 $2 中，拷贝之前，如果 $2 中是符号链接，直接删除
 # @brief Recursively copy paths into another directory, purge dangling
 # symlinks before.
 #
@@ -466,27 +564,42 @@ endif
 # @param 1: Destination directory.
 ##
 define file_copy
+  # 根据 $1 得到所有的文件
+  # 遍历文件，得到文件夹
+  # 排序
 	for src_dir in $(sort $(foreach d,$(wildcard $(1)),$(dir $(d)))); do \
+    # 找到所有 文件 和 目录
 		( cd $$src_dir; find -type f -or -type d ) | \
+      # 进入目标目录
 			( cd $(2); while :; do \
+        # 从管道中读取出一个参数，这里是文件名
 				read FILE; \
+        # 如果文件为空，循环结束，直接退出
 				[ -z "$$FILE" ] && break; \
+        # 如果不是符号链接，跳过
 				[ -L "$$FILE" ] || continue; \
+        # 到这里说明是符号链接
 				echo "Removing symlink $(2)/$$FILE"; \
+        # 删除
 				rm -f "$$FILE"; \
 			done; ); \
 	done; \
 	$(CP) $(1) $(2)
 endef
 
-##@
+##@ 计算整个文件夹的 sha256sum，写入到 sha256sums 文件中
 # @brief Calculate sha256sum of any plain file within a given directory.
 #
 # @param 1: Input directory.
 # @param 2: If set, recurse into subdirectories.
 ##
 define sha256sums
+  # printf 的 %P 是相对路径
+  # 找到所有文件的相对路径
+  # 排序
+  # 计算相对路径的 sha256
 	(cd $(1); find . $(if $(2),,-maxdepth 1) -type f -not -name 'sha256sums' -printf "%P\n" | sort | \
+    # s!...!...!：sed 的替换命令，s 表示替换，! 是分隔符，可以用其他字符代替，如 /。在这里，! 用于避免与路径中的斜杠冲突
 		xargs -r $(MKHASH) -n sha256 | sed -ne 's!^\(.*\) \(.*\)$$!\1 *\2!p' > sha256sums)
 endef
 
@@ -495,7 +608,19 @@ endef
 #
 # @param 1: File name.
 ##
-ext=$(word $(words $(subst ., ,$(1))),$(subst ., ,$(1)))
+# word 用于在指定字符中获取第几个单词
+# 文件名 file.name.txt 会先被转为 file name txt
+# words得到共有 3 个单词
+# word获取到第三个就是文件的拓展名，就是最后一个
+ext=$(word $
+  # words 计算单词个数，空格隔开算一下
+  # a b c 会输出 3
+  (words $(
+    # 将 . 替换位空格
+    subst ., ,$(1)
+  )),
+  $(subst ., ,$(1))
+)
 
 ##@
 # @brief Count Git commits of a package.
@@ -542,8 +667,11 @@ check: FORCE
 	@true
 
 val.%:
+  # $* 是自动变量，代表模式规则中 % 的匹配部分
+  # origin 函数用于确定变量 $* 的来源，如果是 undefined，说明没有定义
 	@$(if $(filter undefined,$(origin $*)),\
 		echo "$* undefined" >&2, \
+    # 变量有定义的话，输出变量的值，将单引号处理为双引号
 		echo '$(subst ','"'"',$($*))' \
 	)
 

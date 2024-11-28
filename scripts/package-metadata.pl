@@ -100,17 +100,26 @@ sub gen_kconfig_overrides() {
 }
 
 my %dep_check;
+# 检查pkg的依赖情况
+# 0 - 不依赖
+# 1 - 依赖
 sub __find_package_dep($$) {
 	my $pkg = shift;
 	my $name = shift;
 	my $deps = $pkg->{depends};
 
+	# pkg没定义依赖，直接返回 0
 	return 0 unless defined $deps;
+	# 遍历 pkg 的依赖，vpkg 是依赖的包名
 	foreach my $vpkg (@{$deps}) {
+		# 找到所有的包对象
 		foreach my $dep (@{$vpackage{$vpkg}}) {
 			next if $dep_check{$dep->{name}};
+			# 标记当前包已经查找过了，dep_check 没有重置的地方吗
 			$dep_check{$dep->{name}} = 1;
+			# 包名匹配，返回依赖
 			return 1 if $dep->{name} eq $name;
+			# 不匹配，则继续查找间接依赖
 			return 1 if (__find_package_dep($dep, $name) == 1);
 		}
 	}
@@ -122,10 +131,15 @@ sub find_package_dep($$) {
 	my $pkg = shift;
 	my $name = shift;
 
+	# 重置检查缓存
 	%dep_check = ();
 	return __find_package_dep($pkg, $name);
 }
 
+# 检查两个包的菜单依赖情况
+# 0 - 互不依赖
+# 1 - a 依赖 b
+# -1 - b 依赖 a
 sub package_depends($$) {
 	my $a = shift;
 	my $b = shift;
@@ -257,16 +271,33 @@ sub mconf_conflicts {
 
 sub print_package_config_category($) {
 	my $cat = shift;
+	# {
+	# 	[submenu]: [ pkg ]
+	# }
 	my %menus;
+	# {
+	# 	[submenu]: submenudep
+	# }
 	my %menu_dep;
 
+	# 如果分类下没包，直接跳过
+	# $category = {
+	# 	[categoryName]: {
+	# 		[pkgName]: [ pkg ]
+	# 	},
+	# }
 	return unless $category{$cat};
 
+	# menu "Base system"
 	print "menu \"$cat\"\n\n";
+	# 获取所有的包
 	my %spkg = %{$category{$cat}};
 
+	# 对包的key进行排序
 	foreach my $spkg (sort {uc($a) cmp uc($b)} keys %spkg) {
+		# 遍历包
 		foreach my $pkg (@{$spkg{$spkg}}) {
+			# buildonly 不展示菜单
 			next if $pkg->{buildonly};
 			my $menu = $pkg->{submenu};
 			if ($menu) {
@@ -278,13 +309,16 @@ sub print_package_config_category($) {
 			push @{$menus{$menu}}, $pkg;
 		}
 	}
+	# 对所有菜单进行排序
 	my @menus = sort {
 		($a eq 'undef' ?  1 : 0) or
 		($b eq 'undef' ? -1 : 0) or
 		($a cmp $b)
 	} keys %menus;
 
+	# 遍历 menuName
 	foreach my $menu (@menus) {
+		# 包按照依赖顺序排序
 		my @pkgs = sort {
 			package_depends($a, $b) or
 			($a->{name} cmp $b->{name})
@@ -297,6 +331,7 @@ sub print_package_config_category($) {
 			next if $pkg->{src}{ignore};
 			my $title = $pkg->{name};
 			my $c = (72 - length($pkg->{name}) - length($pkg->{title}));
+			# 貌似是为了对齐，在 标题 前面加上一些点
 			if ($c > 0) {
 				$title .= ("." x $c). " ". $pkg->{title};
 			}
@@ -348,6 +383,8 @@ sub print_package_overrides() {
 	print "\t\tdefault \"".join(" ", sort keys %overrides)."\"\n\n";
 }
 
+# 生成的内容会放到 tmp/.config-${type}.in 用来为menuconfig提供配置数据
+# 调试：./scripts/package-metadata.pl config "tmp/.packageinfo"
 sub gen_package_config() {
 	parse_package_metadata($ARGV[0]) or exit 1;
 	print "menuconfig IMAGEOPT\n\tbool \"Image configuration\"\n\tdefault n\n";

@@ -14,6 +14,7 @@ empty:=
 space:= $(empty) $(empty)
 $(if $(findstring $(space),$(TOPDIR)),$(error ERROR: The path to the OpenWrt directory must not include any spaces))
 
+# 定义一个空的目标，只是为了在没有目标的时候执行这个
 world:
 
 # grep -e 表示是正则，满足任一 -e 条件的才会被打印出来
@@ -22,7 +23,7 @@ world:
 # test444
 # -m 指定输出的次数，这里只要第一个
 
-# 找到 pkg-config 所在的文件夹
+# 找到 pkg-config 二进制所在的文件夹
 DISTRO_PKG_CONFIG:=$(shell $(TOPDIR)/scripts/command_all.sh pkg-config | grep -e '/usr' -e '/nix/store' -m 1)
 
 # 保存原始的PATH值
@@ -32,9 +33,11 @@ export PATH:=$(if $(STAGING_DIR),$(abspath $(STAGING_DIR)/../host/bin),$(TOPDIR)
 
 ifneq ($(OPENWRT_BUILD),1)
   # 清空make的 flag
+  # MAKEFLAGS 是一个环境变量，它用于向 make 命令传递额外的标志和参数
   _SINGLE=export MAKEFLAGS=$(space);
 
   override OPENWRT_BUILD=1
+  # 设置环境变量，使其可以跨脚本使用
   export OPENWRT_BUILD
   GREP_OPTIONS=
   export GREP_OPTIONS
@@ -63,6 +66,8 @@ $(target/stamp-install): $(package/stamp-compile) $(package/stamp-install)
 check: $(tools/stamp-check) $(toolchain/stamp-check) $(package/stamp-check)
 
 printdb:
+	# true 是 linux命令，什么都不做，默认成功退出
+	# @ 用于不输出命令
 	@true
 
 prepare: $(target/stamp-compile)

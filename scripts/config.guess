@@ -43,6 +43,7 @@ timestamp='2024-07-27'
 
 # 仅保留最后一个 / 之后的内容
 # /home/user/project/file.txt -> file.txt
+# $0 是当前脚本相对于用户执行目录的路径
 me=`echo "$0" | sed -e 's,.*/,,'`
 
 usage="\

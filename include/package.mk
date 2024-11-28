@@ -312,6 +312,7 @@ ifdef DESCRIPTION
 $$(error DESCRIPTION:= is obsolete, use Package/PKG_NAME/description)
 endif
 
+# 默认 description 为 title
 ifndef Package/$(1)/description
 define Package/$(1)/description
 	$(TITLE)

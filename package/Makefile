@@ -13,6 +13,9 @@ include $(INCLUDE_DIR)/rootfs.mk
 -include $(TMP_DIR)/.packagedeps
 package-y += kernel/linux
 $(curdir)/autoremove:=1
+# y：compile + install
+# m：compile
+# n：nothing
 $(curdir)/builddirs:=$(sort $(package-) $(package-y) $(package-m))
 $(curdir)/builddirs-default:=. $(sort $(package-y) $(package-m))
 $(curdir)/builddirs-prereq:=. $(sort $(prereq-y) $(prereq-m))
