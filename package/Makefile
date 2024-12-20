@@ -129,6 +129,7 @@ ifneq ($(CONFIG_USE_APK),)
 		mkdir -p $$d; \
 		cd $$d || continue; \
 		ls *.apk >/dev/null 2>&1 || continue; \
+		# 生成apk包索引
 		$(STAGING_DIR_HOST)/bin/apk mkndx \
 			--root $(TOPDIR) \
 			--keys-dir $(TOPDIR) \
@@ -136,6 +137,7 @@ ifneq ($(CONFIG_USE_APK),)
 			--output packages.adb \
 			$$(ls *.apk | grep -v 'base-files-\|kernel-\|libc-'); \
 		echo -n '{"architecture": "$(ARCH_PACKAGES)", "packages":{' > index.json; \
+		# 读取 adb 文件的内容，最终得到的是 {"name": "version", "name": "version", ...} 这种格式
 		$(STAGING_DIR_HOST)/bin/apk adbdump packages.adb | \
 			awk '/- name: / {pkg = $$NF} ; / version: / {printf "\"%s\": \"%s\", ", pkg, $$NF}' | \
 			sed 's/, $$//' >> index.json; \

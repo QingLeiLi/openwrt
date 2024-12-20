@@ -98,18 +98,26 @@ sub config_diff($$$) {
 	return \%config
 }
 
+# $0 原始config
+# $1 要被删除的config
+# return 返回删除后的config，将 $1 中存在的key从 $0 中删除
 sub config_sub($$) {
 	my $cfg1 = shift;
 	my $cfg2 = shift;
 	my %config = %{$cfg1};
+	# 对 cfg2 的所有key进行 map
 	my @keys = map {
+		# 将 key 存下来
 		my $expr = $_;
+		# 如果 key 中包含 [?.*]，则认为其为 正则表达式
 		$expr =~ /[?.*]/ ?
+			# 从 config 的key中找到所有满足正则表达式的key
 			map {
 				/^$expr$/ ? $_ : ()
 			} keys %config : $expr;
 	} keys %$cfg2;
 
+	# 将 config 中的key删掉
 	foreach my $config (@keys) {
 		delete $config{$config};
 	}

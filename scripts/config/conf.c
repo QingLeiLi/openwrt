@@ -666,8 +666,17 @@ static void check_conf(struct menu *menu)
 }
 
 static const struct option long_opts[] = {
+	// name           has_arg            flag             val
+	// 长选项的名字,    是否需要参数,        flag, val
+	// flag 控制了 getopt_long 解析到长选项的返回值
+	//      NULL：返回 val
+	//      其他：返回 0，然后将 val的值存储到 flag 指定的变量中
+	// 因为 getopt_long 是被循环调用的，每次解析一个，所以并不会冲突
 	{"help",          no_argument,       NULL,            'h'},
+	// 如果解析到 --silent，返回 's'
 	{"silent",        no_argument,       NULL,            's'},
+	// 如果解析到 oldaskconfig，就将 input_mode_opt 设置为 oldaskconfig
+	// getopt_long 返回 0
 	{"oldaskconfig",  no_argument,       &input_mode_opt, oldaskconfig},
 	{"oldconfig",     no_argument,       &input_mode_opt, oldconfig},
 	{"syncconfig",    no_argument,       &input_mode_opt, syncconfig},
@@ -720,6 +729,8 @@ static void conf_usage(const char *progname)
 	printf("  (If none of the above is given, --oldaskconfig is the default)\n");
 }
 
+// ac：argument count。命令行参数的个数
+// av：argument vector。命令行参数的数组，第一个是程序的名称或路径，后面是正常的用户参数
 int main(int ac, char **av)
 {
 	const char *progname = av[0];
@@ -728,24 +739,44 @@ int main(int ac, char **av)
 	const char *input_file = NULL, *output_file = NULL;
 	int no_conf_write = 0;
 
+	// isatty 检查文件描述符是否是一个终端
+	// 参数 0、1、2 分别代表 标准输入、标准输出、标准错误
 	tty_stdio = isatty(0) && isatty(1);
 
+	// getopt_long 用于解析参数，支持长选项（以 -- 开头的选项）
+	// 函数签名：int getopt_long(int argc, char * const argv[],
+    //             const char *optstring,
+    //             const struct option *longopts,
+    //             int *longindex);
+	// optstring 是短选项字符串，带冒号说明需要参数，不带冒号就是不需要参数
+	// longopts 是长选项数组，描述长选项的信息
+	// 返回值：
+	//      -1：没有更多的选项了
+	//      0：解析到长选项，而且长选项配置的 flag 不是NULL
+	//      ?: 解析到了未知的选项
+	//      短选项字符串：这里指的是 h、r、w、s 这几个
+	//      其他：应该是匹配到了长选项，然后长选项的 flag 配置了 NULL，返回了长选项的 val
 	while ((opt = getopt_long(ac, av, "hr:w:s", long_opts, NULL)) != -1) {
 		switch (opt) {
+		// 解析到 -h 或 --help
 		case 'h':
 			conf_usage(progname);
 			exit(1);
 			break;
 		case 'r':
+			// optarg 是 getopt_long 的全局变量，存储了参数的值
 			input_file = optarg;
 			break;
+		// 解析到 -s 或 --silent
 		case 's':
 			conf_set_message_callback(NULL);
 			break;
 		case 'w':
 			output_file = optarg;
 			break;
+		// 匹配到一部分长选项
 		case 0:
+			// 匹配到哪个长选项，标识放到了 input_mode_opt 里面
 			switch (input_mode_opt) {
 			case syncconfig:
 				/*
@@ -769,16 +800,23 @@ int main(int ac, char **av)
 			default:
 				break;
 			}
+			// 这个会覆盖吧，只能指定一个？
 			input_mode = input_mode_opt;
 		default:
 			break;
 		}
 	}
+	// optind 是 getopt_long 的全局变量，用于指示第一个非选项参数 在 av中的索引
+	// 如果没有解析到 非选项参数，optind 就等于 ac
+	// optind 的初始值为 1，解析参数时进行递增，解析结束后，如果有非选项参数，将其置为第一个非选项参数的索引，如果没有，就不赋值，此时，optind 等于 ac
 	if (ac == optind) {
 		fprintf(stderr, "%s: Kconfig file missing\n", av[0]);
 		conf_usage(progname);
 		exit(1);
 	}
+	// 解析非选项参数
+	// 这个函数是用 Bison 生成的，源文件是 parser.y
+	// 类似教程：https://www.yisu.com/ask/31432099.html
 	conf_parse(av[optind]);
 	//zconfdump(stdout);
 

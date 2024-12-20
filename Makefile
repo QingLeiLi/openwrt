@@ -132,13 +132,55 @@ checksum: FORCE
 	$(call sha256sums,$(BIN_DIR),$(CONFIG_BUILDBOT))
 
 buildversion: FORCE
+	# 长这样，后面那部分应该来自最新的 commitid(f9f2dd1d93082d216135b6da891945d0331787d6)
+	# r27797-f9f2dd1d93
 	$(SCRIPT_DIR)/getver.sh > $(BIN_DIR)/version.buildinfo
 
 feedsversion: FORCE
+	# 长这样
+	# src-git packages https://git.openwrt.org/feed/packages.git^30f383c8a8c89858c3f0a876619a51580f0b1e59
+	# src-git luci https://git.openwrt.org/project/luci.git^e34c268411b2fea71e419be5dc0f8f6976d4e714
+	# src-git routing https://git.openwrt.org/feed/routing.git^0ff4ab0506f2ab09b829699bef6b8be8bf8f87f1
+	# src-git telephony https://git.openwrt.org/feed/telephony.git^7f4fa9e79193c1853e1761a68dca585849cff435
 	$(SCRIPT_DIR)/feeds list -fs > $(BIN_DIR)/feeds.buildinfo
 
 diffconfig: FORCE
 	mkdir -p $(BIN_DIR)
+	# 长这样
+	# CONFIG_TARGET_x86=y
+	# CONFIG_TARGET_x86_64=y
+	# CONFIG_TARGET_x86_64_DEVICE_generic=y
+	# CONFIG_IMAGEOPT=y
+	# CONFIG_ISO_IMAGES=y
+	# CONFIG_PACKAGE_cgi-io=y
+	# CONFIG_PACKAGE_libiwinfo=y
+	# CONFIG_PACKAGE_libiwinfo-data=y
+	# CONFIG_PACKAGE_liblucihttp=y
+	# CONFIG_PACKAGE_liblucihttp-ucode=y
+	# CONFIG_PACKAGE_luci=y
+	# CONFIG_PACKAGE_luci-app-firewall=y
+	# CONFIG_PACKAGE_luci-base=y
+	# CONFIG_PACKAGE_luci-light=y
+	# CONFIG_PACKAGE_luci-mod-admin-full=y
+	# CONFIG_PACKAGE_luci-mod-network=y
+	# CONFIG_PACKAGE_luci-mod-status=y
+	# CONFIG_PACKAGE_luci-mod-system=y
+	# CONFIG_PACKAGE_luci-proto-ipv6=y
+	# CONFIG_PACKAGE_luci-proto-ppp=y
+	# CONFIG_PACKAGE_luci-theme-bootstrap=y
+	# CONFIG_PACKAGE_rpcd=y
+	# CONFIG_PACKAGE_rpcd-mod-file=y
+	# CONFIG_PACKAGE_rpcd-mod-iwinfo=y
+	# CONFIG_PACKAGE_rpcd-mod-luci=y
+	# CONFIG_PACKAGE_rpcd-mod-rrdns=y
+	# CONFIG_PACKAGE_rpcd-mod-ucode=y
+	# CONFIG_PACKAGE_ucode-mod-html=y
+	# CONFIG_PACKAGE_ucode-mod-math=y
+	# CONFIG_PACKAGE_uhttpd=y
+	# CONFIG_PACKAGE_uhttpd-mod-ubus=y
+	# # CONFIG_PER_FEED_REPO is not set
+	# CONFIG_TARGET_INITRAMFS_COMPRESSION_NONE=y
+	# CONFIG_TARGET_ROOTFS_INITRAMFS=y
 	$(SCRIPT_DIR)/diffconfig.sh > $(BIN_DIR)/config.buildinfo
 
 buildinfo: FORCE
@@ -148,6 +190,7 @@ prepare: .config $(tools/stamp-compile) $(toolchain/stamp-compile)
 	$(_SINGLE)$(SUBMAKE) -r buildinfo
 
 world: prepare $(target/stamp-compile) $(package/stamp-compile) $(package/stamp-install) $(target/stamp-install) FORCE
+	# 定义在 openwrt/package/Makefile 里面
 	$(_SINGLE)$(SUBMAKE) -r package/index
 	$(_SINGLE)$(SUBMAKE) -r json_overview_image_info
 	$(_SINGLE)$(SUBMAKE) -r checksum

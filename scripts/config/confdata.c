@@ -380,6 +380,8 @@ int conf_read_simple(const char *name, int def)
 	warn_unknown = getenv("KCONFIG_WARN_UNKNOWN_SYMBOLS");
 	werror = getenv("KCONFIG_WERROR");
 	if (name) {
+		// 这个函数是通过 flex 生成的，源文件是 lexer.l
+		// 教程：https://www.cnblogs.com/CSE-kun/p/13968622.html
 		in = zconf_fopen(name);
 	} else {
 		char *env;

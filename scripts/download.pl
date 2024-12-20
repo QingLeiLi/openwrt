@@ -18,8 +18,11 @@ use JSON::PP;
 @ARGV > 2 or die "Syntax: $0 <target dir> <filename> <hash> <url filename> [<mirror> ...]\n";
 
 my $url_filename;
+# DownloadDir
 my $target = glob(shift @ARGV);
+# DownloadFileName
 my $filename = shift @ARGV;
+# FileHash
 my $file_hash = shift @ARGV;
 $url_filename = shift @ARGV unless $ARGV[0] =~ /:\/\//;
 my $scriptdir = dirname($0);
@@ -32,8 +35,10 @@ my $download_tool;
 
 $url_filename or $url_filename = $filename;
 
+# 从多处获取镜像地址
 sub localmirrors {
 	my @mlist;
+	# 从 scripts 目录下读取 localmirrors 作为镜像
 	open LM, "$scriptdir/localmirrors" and do {
 	    while (<LM>) {
 			chomp $_;
@@ -41,6 +46,8 @@ sub localmirrors {
 		}
 		close LM;
 	};
+	# 在 .config 文件中匹配 CONFIG_LOCALMIRROR 作为镜像地址
+	# < 表示只读模式打开
 	open CONFIG, "<".$ENV{'TOPDIR'}."/.config" and do {
 		while (<CONFIG>) {
 			/^CONFIG_LOCALMIRROR="(.+)"/ and do {
@@ -52,23 +59,35 @@ sub localmirrors {
 		close CONFIG;
 	};
 
+	# 从环境变量读取镜像
 	my $mirror = $ENV{'DOWNLOAD_MIRROR'};
 	$mirror and push @mlist, split(/;/, $mirror);
 
 	return @mlist;
 }
 
+# 获取现有项目的镜像
 sub projectsmirrors {
 	my $project = shift;
 	my $append = shift;
 
+	# 长这样
+	# {
+	# 	"@SF": [
+	# 		"https://downloads.sourceforge.net"
+	# 	],
+	# }
 	open (PM, "$scriptdir/projectsmirrors.json") ||
 		die "Can´t open $scriptdir/projectsmirrors.json: $!\n";
+	# 将输入记录分隔符 $/ 设置为未定义值，使得 <PM> 读取整个文件内容，而不是逐行读取
 	local $/;
+	# 读取文件句柄 PM 中的所有内容
 	my $mirror_json = <PM>;
 	my $mirror = decode_json $mirror_json;
 
 	foreach (@{$mirror->{$project}}) {
+		# $_：当前循环中的元素
+		# 向 @mirrors push 一个元素，@mirrors.push(`${$_}/${append || ''}`)
 		push @mirrors, $_ . "/" . ($append or "");
 	}
 }
@@ -89,13 +108,17 @@ sub hash_cmd() {
 	return undef;
 }
 
+# 检查下载工具是否存在
 sub tool_present {
 	my $tool_name = shift;
 	my $compare_line = shift;
 	my $present = 0;
 
+	# 运行命令行，忽略错误输出，将标准输出重定向到 TOOL（命令结尾有管道符）
 	if (open TOOL, "$tool_name --version 2>/dev/null |") {
+		# 如果正常读到了一行内容
 		if (defined(my $line = readline TOOL)) {
+			# 如果输出以 $compare_line 开头，则认为工具存在
 			$present = 1 if $line =~ /^$compare_line /;
 		}
 		close TOOL;
@@ -104,13 +127,18 @@ sub tool_present {
 	return $present
 }
 
+# 通过能力检测选择下载工具
 sub select_tool {
+	# 删除双引号
 	$custom_tool =~ tr/"//d;
 	if ($custom_tool) {
 		return $custom_tool;
 	}
 
 	# Try to use curl if available
+	# 执行 `curl --version`，然后判断第一行输出是否以 `curl` 开头
+	# 正常输出是
+	# curl 8.6.0 (x86_64-apple-darwin23.0) libcurl/8.6.0 (SecureTransport) LibreSSL/3.3.6 zlib/1.2.12 nghttp2/1.61.0
 	if (tool_present("curl", "curl")) {
 		return "curl";
 	}
@@ -162,10 +190,13 @@ sub download
 {
 	my $mirror = shift;
 	my $download_filename = shift;
+	# 获取剩余所有的参数
 	my @additional_mirrors = @_;
 
+	# 去掉镜像末尾的 /
 	$mirror =~ s!/$!!;
 
+	# 如果镜像以 file:// 开头，表示本地镜像
 	if ($mirror =~ s!^file://!!) {
 		if (! -d "$mirror") {
 			print STDERR "Wrong local cache directory -$mirror-.\n";
@@ -258,9 +289,11 @@ sub cleanup
 @mirrors = localmirrors();
 
 foreach my $mirror (@ARGV) {
+	# 镜像以 @SF 开头，表示从 sourceforge 下载
 	if ($mirror =~ /^\@SF\/(.+)$/) {
 		# give sourceforge a few more tries, because it redirects to different mirrors
 		for (1 .. 5) {
+			# $1 是上面if里正则捕获组
 			projectsmirrors '@SF', $1;
 		}
 	} elsif ($mirror =~ /^\@OPENWRT$/) {
@@ -270,6 +303,7 @@ foreach my $mirror (@ARGV) {
 	} elsif ($mirror =~ /^\@APACHE\/(.+)$/) {
 		projectsmirrors '@APACHE', $1;
 	} elsif ($mirror =~ /^\@GITHUB\/(.+)$/) {
+		# 加了5个进去，多重试几次
 		# give github a few more tries (different mirrors)
 		for (1 .. 5) {
 			projectsmirrors '@GITHUB', $1;
@@ -280,6 +314,7 @@ foreach my $mirror (@ARGV) {
 		projectsmirrors '@SAVANNAH', $1;
 	} elsif ($mirror =~ /^\@KERNEL\/(.+)$/) {
 		my @extra = ( $1 );
+		# 内核区分 rc 和 正式版
 		if ($filename =~ /linux-\d+\.\d+(?:\.\d+)?-rc/) {
 			push @extra, "$extra[0]/testing";
 		} elsif ($filename =~ /linux-(\d+\.\d+(?:\.\d+)?)/) {
@@ -297,8 +332,10 @@ foreach my $mirror (@ARGV) {
 
 projectsmirrors '@OPENWRT';
 
+# 如果文件存在，计算hash判断是否匹配
 if (-f "$target/$filename") {
 	$hash_cmd and do {
+		# 生成 hash 文件
 		if (system("cat '$target/$filename' | $hash_cmd > '$target/$filename.hash'")) {
 			die "Failed to generate hash for $filename\n";
 		}
@@ -315,8 +352,10 @@ if (-f "$target/$filename") {
 	};
 }
 
+# 下载工具
 $download_tool = select_tool();
 
+# 如果文件不存在，从镜像下载
 while (!-f "$target/$filename") {
 	my $mirror = shift @mirrors;
 	$mirror or die "No more mirrors to try - giving up.\n";

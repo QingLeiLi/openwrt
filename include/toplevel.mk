@@ -263,6 +263,7 @@ else
   DOWNLOAD_DIRS = package/download
 endif
 
+# 后面那个 flock 是没有就依赖它，促使make去把 flock 编译出来
 download: .config FORCE $(if $(wildcard $(STAGING_DIR_HOST)/bin/flock),,tools/flock/compile)
 	@+$(foreach dir,$(DOWNLOAD_DIRS),$(SUBMAKE) $(dir);)
 

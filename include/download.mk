@@ -22,30 +22,67 @@ DOWNLOAD_RDEP=$(STAMP_PREPARED) $(HOST_STAMP_PREPARED)
 export DOWNLOAD_CHECK_CERTIFICATE:=$(CONFIG_DOWNLOAD_CHECK_CERTIFICATE)
 export DOWNLOAD_TOOL_CUSTOM:=$(CONFIG_DOWNLOAD_TOOL_CUSTOM)
 
+# 如果是 github 的 URL，返回 github_archive，否则 git
 define dl_method_git
-$(if $(filter https://github.com/% git://github.com/%,$(1)),github_archive,git)
+$(if
+	$(filter
+		https://github.com/% git://github.com/%,
+		$(1)
+	),
+	github_archive,
+	git
+)
 endef
 
+# 从下载链接推测出下载方法
 # Try to guess the download method from the URL
+# $1：URL
+# $2：PROTO
+# return：返回一个字符串，代表具体使用的下载方法
 define dl_method
 $(strip \
-  $(if $(filter git,$(2)),$(call dl_method_git,$(1),$(2)),
-    $(if $(2),$(2), \
-      $(if $(filter @OPENWRT @APACHE/% @DEBIAN/% @GITHUB/% @GNOME/% @GNU/% @KERNEL/% @SF/% @SAVANNAH/% ftp://% http://% https://% file://%,$(1)),default, \
-        $(if $(filter git://%,$(1)),$(call dl_method_git,$(1),$(2)), \
-          $(if $(filter svn://%,$(1)),svn, \
-            $(if $(filter cvs://%,$(1)),cvs, \
-              $(if $(filter hg://%,$(1)),hg, \
-                $(if $(filter sftp://%,$(1)),bzr, \
-                  unknown \
-                ) \
-              ) \
-            ) \
-          ) \
-        ) \
-      ) \
-    ) \
-  ) \
+  	# 如果协议包含 git
+  	$(if
+		$(filter git,$(2)),
+		# 根据是否是 github ，细分为 github_archive 和 git，可能是因为 github 支持直接下载tar包
+		$(call dl_method_git,$(1),$(2)),
+		# 如果指定了 协议 直接返回 协议
+    	$(if $(2),$(2), \
+      		$(if
+				# 如果包含这些前缀，使用 default 方法
+				$(filter
+					@OPENWRT @APACHE/% @DEBIAN/% @GITHUB/% @GNOME/% @GNU/% @KERNEL/% @SF/% @SAVANNAH/% ftp://% http://% https://% file://%,
+					$(1)
+				),
+				default, \
+        		$(if
+					$(filter
+						git://%,
+						$(1)
+					),
+					# 以 git:// 开头的链接，根据是否 github 进行细分
+					$(call dl_method_git,$(1),$(2)), \
+          			$(if
+						$(filter svn://%,$(1)),
+						svn, \
+            			$(if
+							$(filter cvs://%,$(1)),
+							cvs, \
+              				$(if
+								$(filter hg://%,$(1)),
+								hg, \
+                				$(if
+								$(filter sftp://%,$(1)),
+								bzr, \
+                  					unknown \
+                				) \
+              				) \
+            			) \
+          			) \
+        		) \
+      		) \
+    	) \
+  	) \
 )
 endef
 
@@ -55,14 +92,21 @@ dl_pack/gz=gzip -nc > $(1)
 dl_pack/xz=xz -zc -7e > $(1)
 dl_pack/zst=zstd -T0 --ultra -20 -c > $(1)
 dl_pack/unknown=$(error ERROR: Unknown pack format for file $(1))
+
+# 根据文件拓展名找到合适的打包方式
 define dl_pack
-	$(if $(dl_pack/$(call ext,$(1))),$(dl_pack/$(call ext,$(1))),$(dl_pack/unknown))
+	$(if
+		# ext 函数在 rules 里面定义
+		$(dl_pack/$(call ext,$(1))),
+		$(dl_pack/$(call ext,$(1))),
+		$(dl_pack/unknown))
 endef
 define dl_tar_pack
 	$(TAR) --numeric-owner --owner=0 --group=0 --mode=a-s --sort=name \
 		$$$${TAR_TIMESTAMP:+--mtime="$$$$TAR_TIMESTAMP"} -c $(2) | $(call dl_pack,$(1))
 endef
 
+# 计算文件的 sha256 hash值
 gen_sha256sum = $(shell $(MKHASH) sha256 $(DL_DIR)/$(1))
 
 # Used in Build/CoreTargets and HostBuild/Core as an integrity check for
@@ -111,18 +155,28 @@ C_hash_missing = $(3) is missing, set to $(call gen_sha256sum,$(1))
 # $(2): expected hash value
 # $(3): var name of the the form: {PKG_,Download/<name>:}{,MIRROR_}{HASH,MIRROR_HASH}
 check_hash = \
-  $(if $(wildcard $(DL_DIR)/$(1)), \
-    $(if $(filter-out x,$(2)), \
-      $(if $(filter 64,$(shell printf '%s' '$(2)' | wc -c)), \
-        $(if $(filter $(2),$(call gen_sha256sum,$(1))),, \
-          $(call check_warn,hash_mismatch,$(1),$(2),$(3)) \
-        ), \
-        $(call check_warn,hash_deprecated,$(1),$(2),$(3)), \
-      ), \
-      $(call check_warn,hash_missing,$(1),$(2),$(3)) \
-    ), \
-    $(call check_warn,download_missing,$(1),$(2),$(3)) \
-  )
+	$(if
+		$(wildcard $(DL_DIR)/$(1)), \
+    	$(if $(filter-out x,$(2)), \
+			# 如果hash不是 x 才执行
+      		$(if
+				# 打印出hash值并统计字符数
+				$(filter 64,$(shell printf '%s' '$(2)' | wc -c)), \
+				# 如果是64位，认为是 sha256
+        		$(if
+					$(filter $(2),$(call gen_sha256sum,$(1))),
+					, \
+					# hahs不匹配
+          			$(call check_warn,hash_mismatch,$(1),$(2),$(3)) \
+        		), \
+				# 不支持其他的hash方式了
+        		$(call check_warn,hash_deprecated,$(1),$(2),$(3)), \
+      		), \
+      		$(call check_warn,hash_missing,$(1),$(2),$(3)) \
+    	), \
+		# 没找到目标文件
+    	$(call check_warn,download_missing,$(1),$(2),$(3)) \
+	)
 
 ifdef FIXUP
 F_md5_deprecated = $(SCRIPT_DIR)/fixup-makefile.pl $(CURDIR)/Makefile rename-var $(2) $(3)
@@ -135,7 +189,12 @@ check_md5 = \
     $(call check_warn,md5_deprecated,$(1),$(2),$(3)) \
   )
 
-hash_var = $(if $(filter-out x,$(1)),MD5SUM,HASH)
+# 包含x就认为是 md5
+hash_var = $(if
+	$(filter-out x,$(1)),
+	MD5SUM,
+	HASH
+)
 endif
 
 define DownloadMethod/unknown
@@ -154,10 +213,27 @@ endef
 # $(2): "PKG_" if <name> as in Download/<name> is "default", otherwise "Download/<name>:"
 # $(3): shell command sequence to do the download
 define wrap_mirror
-$(if $(if $(MIRROR),$(filter-out x,$(MIRROR_HASH))),$(SCRIPT_DIR)/download.pl "$(DL_DIR)" "$(FILE)" "$(MIRROR_HASH)" "" || ( $(3) ),$(3)) \
-$(if $(filter check,$(1)), \
-	$(call check_hash,$(FILE),$(MIRROR_HASH),$(2)MIRROR_$(call hash_var,$(MIRROR_MD5SUM))) \
-	$(call check_md5,$(MIRROR_MD5SUM),$(2)MIRROR_MD5SUM,$(2)MIRROR_HASH) \
+$(if
+	$(if
+		$(MIRROR),
+		$(filter-out x,$(MIRROR_HASH))
+	),
+	# 下载文件，并校验hash，如果失败，则执行 $3
+	$(SCRIPT_DIR)/download.pl "$(DL_DIR)" "$(FILE)" "$(MIRROR_HASH)" "" || ( $(3) ),
+	$(3)
+)
+	$(if
+		$(filter check,$(1)), \
+		$(call check_hash,
+			$(FILE),
+			$(MIRROR_HASH),
+			$(2)MIRROR_$(call hash_var,$(MIRROR_MD5SUM))
+		) \
+		$(call check_md5,
+			$(MIRROR_MD5SUM),
+			$(2)MIRROR_MD5SUM,
+			$(2)MIRROR_HASH
+		) \
 )
 endef
 
@@ -201,7 +277,9 @@ define DownloadMethod/git
 endef
 
 define DownloadMethod/github_archive
-	$(call wrap_mirror,$(1),$(2), \
+	$(call wrap_mirror,
+		$(1),
+		$(2), \
 		$(SCRIPT_DIR)/dl_github_archive.py \
 			--dl-dir="$(DL_DIR)" \
 			--url="$(URL)" \
@@ -301,7 +379,7 @@ Validate/bzr=SOURCE_VERSION SUBDIR
 Validate/hg=SOURCE_VERSION SUBDIR
 Validate/darcs=SOURCE_VERSION SUBDIR
 
-# 是用于所有包的默认值
+# 是用于所有包的默认值，用于覆盖为空值，避免其他包/target的影响
 define Download/Defaults
   URL:=
   FILE:=
@@ -335,28 +413,45 @@ define Download/default
 endef
 
 define Download
-  $(eval $(Download/Defaults))
-  $(eval $(Download/$(1)))
-  # FIELD 是foreach的循环变量，后面的 URL、FILE 才是要循环的变量列表
-  # Validate/git 是一个变量，定义了各自的下载协议的必填字段
-  $(foreach FIELD,URL FILE $(Validate/$(call dl_method,$(URL),$(PROTO))),
-    ifeq ($($(FIELD)),)
-      $$(error Download/$(1) is missing the $(FIELD) field.)
-    endif
-  )
+	# 清空上一个包的值
+	$(eval $(Download/Defaults))
+	# 使用当前包的值
+	$(eval $(Download/$(1)))
+	# FIELD 是foreach的循环变量，后面的 URL、FILE 才是要循环的变量列表
+	# Validate/git 是一个变量，定义了各自的下载协议的必填字段
+	# 下载的时候，URL 和 FILE 是必填的，其次根据 dl_method 找到每个方法各自必填的字段，进行校验
+  	$(foreach FIELD,URL FILE $(Validate/$(call dl_method,$(URL),$(PROTO))),
+    	ifeq ($($(FIELD)),)
+      	$$(error Download/$(1) is missing the $(FIELD) field.)
+    	endif
+  	)
 
-  $(foreach dep,$(DOWNLOAD_RDEP),
-    $(dep): $(DL_DIR)/$(FILE)
-  )
-  download: $(DL_DIR)/$(FILE)
+  	$(foreach dep,$(DOWNLOAD_RDEP),
+    	$(dep): $(DL_DIR)/$(FILE)
+  	)
+  	download: $(DL_DIR)/$(FILE)
 
-  $(DL_DIR)/$(FILE):
-	mkdir -p $(DL_DIR)
-	$(call locked, \
-		$(if $(DownloadMethod/$(call dl_method,$(URL),$(PROTO))), \
-			$(call DownloadMethod/$(call dl_method,$(URL),$(PROTO)),check,$(if $(filter default,$(1)),PKG_,Download/$(1):)), \
-			$(DownloadMethod/unknown) \
-		),\
-		$(FILE))
+  	$(DL_DIR)/$(FILE):
+		mkdir -p $(DL_DIR)
+		# $1 要执行的脚本
+		# $@ 锁的名字
+		$(call locked, \
+			$(if
+				$(DownloadMethod/$(call dl_method,$(URL),$(PROTO))), \
+				$(call
+					DownloadMethod/$(call dl_method,
+						$(URL),
+						$(PROTO)
+					),
+					check,
+					$(if
+						$(filter default,$(1)),
+						PKG_,
+						Download/$(1):
+					)
+				), \
+				$(DownloadMethod/unknown) \
+			),\
+			$(FILE))
 
 endef

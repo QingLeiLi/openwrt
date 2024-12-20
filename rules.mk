@@ -548,10 +548,16 @@ ifneq ($(wildcard $(STAGING_DIR_HOST)/bin/flock),)
   define locked
 	SHELL= \
 	flock \
-		$(TMP_DIR)/.$(if $(2),$(strip $(2)),global).flock \
+		$(TMP_DIR)/.$(if
+      $(2),
+      $(strip $(2)),
+      global
+    ).flock \
+    # -c：指定要执行的脚本
 		-c '$(subst ','\'',$(1))'
   endef
 else
+  # 不支持 flock 直接执行 $1
   locked=$(1)
 endif
 
@@ -603,7 +609,7 @@ define sha256sums
 		xargs -r $(MKHASH) -n sha256 | sed -ne 's!^\(.*\) \(.*\)$$!\1 *\2!p' > sha256sums)
 endef
 
-##@
+##@ 获取文件的拓展名
 # @brief Retrieve file extension.
 #
 # @param 1: File name.

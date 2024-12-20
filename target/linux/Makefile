@@ -8,4 +8,10 @@ include $(INCLUDE_DIR)/target.mk
 export TARGET_BUILD=1
 
 prereq clean download prepare compile install oldconfig menuconfig nconfig xconfig update refresh dtb: FORCE
-	@+$(NO_TRACE_MAKE) -C $(firstword $(wildcard feeds/$(BOARD) $(BOARD))) $@
+	# 可能一次只能编译一个平台的，所以找到一个target就开始编译了
+	@+$(NO_TRACE_MAKE) -C $(firstword
+		$(wildcard
+			feeds/$(BOARD)
+			$(BOARD)
+		)
+	) $@
