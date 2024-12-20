@@ -135,7 +135,7 @@ ifneq ($(CONFIG_USE_APK),)
 			--keys-dir $(TOPDIR) \
 			--sign $(BUILD_KEY_APK_SEC) \
 			--output packages.adb \
-			$$(ls *.apk | grep -v 'base-files-\|kernel-\|libc-'); \
+			$$(ls *.apk | grep -vE '^(base-files-|kernel-|libc-)'); \
 		echo -n '{"architecture": "$(ARCH_PACKAGES)", "packages":{' > index.json; \
 		# 读取 adb 文件的内容，最终得到的是 {"name": "version", "name": "version", ...} 这种格式
 		$(STAGING_DIR_HOST)/bin/apk adbdump packages.adb | \

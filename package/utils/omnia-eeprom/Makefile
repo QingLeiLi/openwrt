@@ -15,6 +15,7 @@ PKG_SOURCE_SUBDIR:=$(PKG_NAME)-v$(PKG_VERSION)
 PKG_SOURCE:=$(PKG_NAME)-v$(PKG_VERSION).tar.bz2
 PKG_SOURCE_URL:=https://gitlab.nic.cz/turris/omnia-eeprom/-/archive/v$(PKG_VERSION)/
 PKG_HASH:=6f949d0b8080adca8bae088774ce615b563ba6ec2807cce97ee6769b4eee7bbf
+PKG_FLAGS:=nonshared
 
 PKG_MAINTAINER:=Marek Behun <kabel@kernel.org>
 PKG_LICENSE:=GPL-2.0-or-later
@@ -28,7 +29,7 @@ define Package/omnia-eeprom
   CATEGORY:=Utilities
   URL:=https://gitlab.nic.cz/turris/omnia-eeprom
   TITLE:=CZ.NIC Turris Omnia EEPROM accessing utility
-  DEPENDS:=@TARGET_mvebu_cortexa9_DEVICE_cznic_turris-omnia +kmod-eeprom-at24
+  DEPENDS:=@TARGET_mvebu_cortexa9 +kmod-eeprom-at24
 endef
 
 define Package/omnia-eeprom/description

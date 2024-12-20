@@ -104,23 +104,24 @@ _ignore = $(foreach p,$(IGNORE_PACKAGES),--ignore $(p))
 # DEFAULT_PACKAGES.
 # 如果以下几个配置发生了变化，则清除 targetinfo 的缓存
 # Keep DYNAMIC_DEF_PKG_CONF in sync with target.mk to reflect the same configs
-DYNAMIC_DEF_PKG_CONF := CONFIG_USE_APK CONFIG_SELINUX CONFIG_SMALL_FLASH CONFIG_SECCOMP
-check-dynamic-def-pkg: FORCE
-	@+DEF_PKG_CONFS=""; \
-	if [ -f $(TOPDIR)/.config ]; then \
-		for config in $(DYNAMIC_DEF_PKG_CONF); do \
-			# 使用 grep 命令查找配置项在 .config 文件中设置为 y 的行，并将其添加到 DEF_PKG_CONFS
-			DEF_PKG_CONFS="$$DEF_PKG_CONFS "$$(grep "$$config"=y $(TOPDIR)/.config); \
-		done; \
-	fi; \
-	# 读取旧的配置
-	[ ! -f tmp/.packagedynamicdefault ] || OLD_DEF_PKG_CONFS=$$(cat tmp/.packagedynamicdefault); \
-	# 新旧配置如果不同，删除 tmp/info/.targetinfo*
-	[ "$$DEF_PKG_CONFS" = "$$OLD_DEF_PKG_CONFS" ] || rm -rf tmp/info/.targetinfo*; \
-	mkdir -p tmp && echo "$$DEF_PKG_CONFS" > tmp/.packagedynamicdefault;
+# DYNAMIC_DEF_PKG_CONF := CONFIG_USE_APK CONFIG_SELINUX CONFIG_SMALL_FLASH CONFIG_SECCOMP
+# check-dynamic-def-pkg: FORCE
+# 	@+DEF_PKG_CONFS=""; \
+# 	if [ -f $(TOPDIR)/.config ]; then \
+# 		for config in $(DYNAMIC_DEF_PKG_CONF); do \
+# 			# 使用 grep 命令查找配置项在 .config 文件中设置为 y 的行，并将其添加到 DEF_PKG_CONFS
+# 			DEF_PKG_CONFS="$$DEF_PKG_CONFS "$$(grep "$$config"=y $(TOPDIR)/.config); \
+# 		done; \
+# 	fi; \
+# 	# 读取旧的配置
+# 	[ ! -f tmp/.packagedynamicdefault ] || OLD_DEF_PKG_CONFS=$$(cat tmp/.packagedynamicdefault); \
+# 	# 新旧配置如果不同，删除 tmp/info/.targetinfo*
+# 	[ "$$DEF_PKG_CONFS" = "$$OLD_DEF_PKG_CONFS" ] || rm -rf tmp/info/.targetinfo*; \
+# 	mkdir -p tmp && echo "$$DEF_PKG_CONFS" > tmp/.packagedynamicdefault;
 
-prepare-tmpinfo: check-dynamic-def-pkg FORCE
-	# 检查环境要求、链接 stage/bin 所需命令
+# prepare-tmpinfo: check-dynamic-def-pkg FORCE
+# 	# 检查环境要求、链接 stage/bin 所需命令
+prepare-tmpinfo: FORCE
 	@+$(MAKE) -r -s $(STAGING_DIR_HOST)/.prereq-build $(PREP_MK)
 	mkdir -p tmp/info feeds
 	# 检查 $(TOPDIR)/feeds/base 是否存在，不存在就从 $(TOPDIR)/feeds/base 链接过来
