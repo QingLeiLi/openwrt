@@ -63,20 +63,58 @@ ifneq ($(DUMP),)
   all: dumpinfo
 endif
 
-target_conf=$(subst .,_,$(subst -,_,$(subst /,_,$(1))))
+# $(subst from,to,text)：将text中将所有的from字符串替换为to字符串
+# 将参数中的 .-/ 替换为 _
+target_conf=$(subst
+  .,
+  _,
+  $(subst
+    -,
+    _,
+    $(subst
+      /,
+      _,
+      $(1)
+    )
+  )
+)
 ifeq ($(DUMP),)
+  # 获取平台的文件夹，feeds 的优先级要高于系统内置的
   PLATFORM_DIR:=$(firstword $(wildcard $(TOPDIR)/target/linux/feeds/$(BOARD) $(TOPDIR)/target/linux/$(BOARD)))
-  SUBTARGET:=$(strip $(foreach subdir,$(patsubst $(PLATFORM_DIR)/%/target.mk,%,$(wildcard $(PLATFORM_DIR)/*/target.mk)),$(if $(CONFIG_TARGET_$(call target_conf,$(BOARD)_$(subdir))),$(subdir))))
+  # 获取平台的子目标，像 x86 会细分 64位 和 32位
+  SUBTARGET:=$(strip
+    $(foreach
+      subdir,
+      # 获取到子平台的目录名
+      $(patsubst
+        $(PLATFORM_DIR)/%/target.mk,
+        %,
+        # 查找到所有的子平台 target.mk
+        $(wildcard
+          $(PLATFORM_DIR)/*/target.mk
+        )
+      ),
+      $(if
+        $(CONFIG_TARGET_$(call target_conf,$(BOARD)_$(subdir))
+        ),
+        $(subdir)
+      )
+    )
+  )
 else
+  # 如果是 DUMP 的话，在哪个文件夹就分析哪个文件夹
   PLATFORM_DIR:=${CURDIR}
   ifeq ($(SUBTARGETS),)
     SUBTARGETS:=$(strip $(patsubst $(PLATFORM_DIR)/%/target.mk,%,$(wildcard $(PLATFORM_DIR)/*/target.mk)))
   endif
 endif
 
+# 拼接主板和子目标
 TARGETID:=$(BOARD)$(if $(SUBTARGET),/$(SUBTARGET))
+# 平台的子目录
 PLATFORM_SUBDIR:=$(PLATFORM_DIR)$(if $(SUBTARGET),/$(SUBTARGET))
 
+# 引用 主文件的 makefile，引用子目录的 target.mk
 ifneq ($(TARGET_BUILD),1)
   ifndef DUMP
     include $(PLATFORM_DIR)/Makefile
@@ -90,12 +128,14 @@ else
   endif
 endif
 
+# 只在有足够存储的机器上才启用 ujail
 # include ujail on systems with enough storage
 ifeq ($(filter small_flash,$(FEATURES)),)
   DEFAULT_PACKAGES+=procd-ujail
 endif
 
 # Add device specific packages (here below to allow device type set from subtarget)
+# DEFAULT_PACKAGES.$(DEVICE_TYPE) 是拼接出来的变量名，允许在子目标中添加额外的包
 DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.$(DEVICE_TYPE))
 
 ##@
@@ -103,14 +143,33 @@ DEFAULT_PACKAGES += $(DEFAULT_PACKAGES.$(DEVICE_TYPE))
 #
 # @param 1: Package list.
 ##
-filter_packages = $(filter-out -% $(patsubst -%,%,$(filter -%,$(1))),$(1))
+
+# 整体功能是把 $(1) 中以 - 开头的内容删掉
+filter_packages = $(filter-out
+  # patsubst 是获取 - 后面的内容
+  -% $(patsubst
+    -%,
+    %,
+    # 只保留以 - 开头的元素
+    $(filter
+      -%,
+      $(1)
+    )
+  ),
+  $(1)
+)
 
 ##@
 # @brief Append extra package dependencies.
 #
 # @param 1: Package list.
 ##
-extra_packages = $(if $(filter wpad wpad-% nas,$(1)),iwinfo)
+# 如果$1中有 wpad、以 wpad- 开头、nas 的元素，就将 iwinfo 添加到 extra_packages 中
+extra_packages = $(if
+  # 保留 wpad、以 wpad- 开头、nas 的元素
+  $(filter wpad wpad-% nas,$(1)),
+  iwinfo
+)
 
 define ProfileDefault
   NAME:=
@@ -136,7 +195,9 @@ define Profile
 endef
 endif
 
+# 这个对比应该是确定也没有子目标的
 ifneq ($(PLATFORM_DIR),$(PLATFORM_SUBDIR))
+  # 有子目标走这个
   define IncludeProfiles
     -include $(sort $(wildcard $(PLATFORM_DIR)/profiles/*.mk))
     -include $(sort $(wildcard $(PLATFORM_SUBDIR)/profiles/*.mk))
@@ -166,6 +227,7 @@ GENERIC_HACK_DIR := $(GENERIC_PLATFORM_DIR)/hack$(if $(wildcard $(GENERIC_PLATFO
 GENERIC_FILES_DIR := $(foreach dir,$(wildcard $(GENERIC_PLATFORM_DIR)/files $(GENERIC_PLATFORM_DIR)/files-$(KERNEL_PATCHVER)),"$(dir)")
 
 __config_name_list = $(1)/config-$(KERNEL_PATCHVER) $(1)/config-default
+# 有优先级，取第一个
 __config_list = $(firstword $(wildcard $(call __config_name_list,$(1))))
 find_kernel_config=$(if $(__config_list),$(__config_list),$(lastword $(__config_name_list)))
 
@@ -175,6 +237,7 @@ ifneq ($(PLATFORM_DIR),$(PLATFORM_SUBDIR))
   LINUX_SUBTARGET_CONFIG = $(call find_kernel_config,$(PLATFORM_SUBDIR))
 endif
 
+# 所有内核的配置文件
 # config file list used for compiling
 LINUX_KCONFIG_LIST = $(wildcard $(GENERIC_LINUX_CONFIG) $(LINUX_TARGET_CONFIG) $(LINUX_SUBTARGET_CONFIG) $(TOPDIR)/env/kernel-config)
 
