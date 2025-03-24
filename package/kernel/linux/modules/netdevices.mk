@@ -447,9 +447,10 @@ $(eval $(call KernelPackage,phy-micrel))
 define KernelPackage/phy-realtek
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=Realtek Ethernet PHY driver
-   KCONFIG:=CONFIG_REALTEK_PHY
-   DEPENDS:=+kmod-libphy
-   FILES:=$(LINUX_DIR)/drivers/net/phy/realtek.ko
+   KCONFIG:=CONFIG_REALTEK_PHY \
+    CONFIG_REALTEK_PHY_HWMON=y
+   DEPENDS:=+kmod-libphy +kmod-hwmon-core
+   FILES:=$(LINUX_DIR)/drivers/net/phy/realtek/realtek.ko
    AUTOLOAD:=$(call AutoLoad,18,realtek,1)
 endef
 
@@ -575,32 +576,38 @@ endef
 
 $(eval $(call KernelPackage,dsa-b53-mdio))
 
-
-define KernelPackage/dsa-tag-dsa
+define KernelPackage/dsa-mv88e6060
   SUBMENU:=$(NETWORK_DEVICES_MENU)
-  TITLE:=Marvell DSA type DSA and EDSA taggers
-  DEPENDS:=+kmod-dsa
-  KCONFIG:= CONFIG_NET_DSA_TAG_DSA_COMMON \
-	CONFIG_NET_DSA_TAG_DSA \
-	CONFIG_NET_DSA_TAG_EDSA
-  FILES:=$(LINUX_DIR)/net/dsa/tag_dsa.ko
-  AUTOLOAD:=$(call AutoLoad,40,tag_dsa,1)
+  TITLE:=Marvell MV88E6060 DSA Switch
+  DEPENDS:=+kmod-dsa +kmod-phy-marvell
+  KCONFIG:=CONFIG_NET_DSA_TAG_TRAILER \
+  CONFIG_NET_DSA_MV88E6060
+  FILES:= \
+  $(LINUX_DIR)/drivers/net/dsa/mv88e6060.ko \
+  $(LINUX_DIR)/net/dsa/tag_trailer.ko
+  AUTOLOAD:=$(call AutoLoad,41,mv88e6060,1)
 endef
 
-define KernelPackage/dsa-tag-dsa/description
-  Kernel modules for Marvell DSA and EDSA tagging
+define KernelPackage/dsa-mv88e6060/description
+  Kernel modules for MV88E6060 DSA switches
 endef
 
-$(eval $(call KernelPackage,dsa-tag-dsa))
+$(eval $(call KernelPackage,dsa-mv88e6060))
 
 define KernelPackage/dsa-mv88e6xxx
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Marvell MV88E6XXX DSA Switch
-  DEPENDS:=+kmod-dsa +kmod-ptp +kmod-phy-marvell +kmod-dsa-tag-dsa
-  KCONFIG:=CONFIG_NET_DSA_MV88E6XXX \
+  DEPENDS:=+kmod-dsa +kmod-ptp +kmod-phy-marvell
+  KCONFIG:= \
+	CONFIG_NET_DSA_TAG_DSA_COMMON \
+	CONFIG_NET_DSA_TAG_DSA \
+	CONFIG_NET_DSA_TAG_EDSA \
+	CONFIG_NET_DSA_MV88E6XXX \
 	CONFIG_NET_DSA_MV88E6XXX_LEDS=y \
 	CONFIG_NET_DSA_MV88E6XXX_PTP=y
-  FILES:=$(LINUX_DIR)/drivers/net/dsa/mv88e6xxx/mv88e6xxx.ko
+  FILES:= \
+	$(LINUX_DIR)/net/dsa/tag_dsa.ko \
+	$(LINUX_DIR)/drivers/net/dsa/mv88e6xxx/mv88e6xxx.ko
   AUTOLOAD:=$(call AutoLoad,41,mv88e6xxx,1)
 endef
 
@@ -629,6 +636,65 @@ define KernelPackage/dsa-qca8k/description
 endef
 
 $(eval $(call KernelPackage,dsa-qca8k))
+
+
+define KernelPackage/dsa-realtek
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Realtek common module RTL83xx DSA switch family
+  DEPENDS:=+kmod-dsa +kmod-phy-realtek +kmod-regmap-core @!TARGET_x86 @!TARGET_bcm47xx @!TARGET_uml
+  KCONFIG:= \
+	CONFIG_NET_DSA_REALTEK \
+	CONFIG_NET_DSA_REALTEK_MDIO=y \
+	CONFIG_NET_DSA_REALTEK_SMI=y
+  FILES:= $(LINUX_DIR)/drivers/net/dsa/realtek/realtek_dsa.ko
+endef
+
+define KernelPackage/dsa-realtek/description
+  Common kernel module for Realtek RTL83xx DSA switch family
+endef
+
+$(eval $(call KernelPackage,dsa-realtek))
+
+
+define KernelPackage/dsa-rtl8366rb
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Realtek RTL8365MB switch DSA support
+  DEPENDS:=+kmod-dsa-realtek @!TARGET_x86 @!TARGET_bcm47xx @!TARGET_uml
+  KCONFIG:= \
+	CONFIG_NET_DSA_REALTEK_RTL8366RB \
+	CONFIG_NET_DSA_TAG_RTL4_A
+  FILES:= \
+	$(LINUX_DIR)/drivers/net/dsa/realtek/rtl8366.ko \
+	$(LINUX_DIR)/net/dsa/tag_rtl4_a.ko
+  AUTOLOAD:=$(call AutoLoad,42,rtl8366,1)
+endef
+
+define KernelPackage/dsa-rtl8366rb/description
+  DSA based kernel modules for the Realtek RTL8366RB switch family
+endef
+
+$(eval $(call KernelPackage,dsa-rtl8366rb))
+
+
+define KernelPackage/dsa-rtl8365mb
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Realtek RTL8365MB switch DSA support
+  DEPENDS:=+kmod-dsa-realtek @!TARGET_x86 @!TARGET_bcm47xx @!TARGET_uml
+  KCONFIG:= \
+	CONFIG_NET_DSA_REALTEK_RTL8365MB \
+	CONFIG_NET_DSA_TAG_RTL8_4
+  FILES:= \
+	$(LINUX_DIR)/drivers/net/dsa/realtek/rtl8365mb.ko \
+	$(LINUX_DIR)/net/dsa/tag_rtl8_4.ko
+  AUTOLOAD:=$(call AutoLoad,42,rtl8365mb,1)
+endef
+
+define KernelPackage/dsa-rtl8365mb/description
+  DSA based kernel modules for the Realtek RTL8365MB switch family
+endef
+
+$(eval $(call KernelPackage,dsa-rtl8365mb))
+
 
 define KernelPackage/swconfig
   SUBMENU:=$(NETWORK_DEVICES_MENU)
@@ -958,7 +1024,7 @@ define KernelPackage/r8169
     CONFIG_R8169 \
     CONFIG_R8169_LEDS=y
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/realtek/r8169.ko
-  AUTOLOAD:=$(call AutoProbe,r8169)
+  AUTOLOAD:=$(call AutoProbe,r8169,1)
 endef
 
 define KernelPackage/r8169/description
@@ -1082,7 +1148,8 @@ define KernelPackage/ixgbe
   KCONFIG:=CONFIG_IXGBE \
     CONFIG_IXGBE_VXLAN=n \
     CONFIG_IXGBE_HWMON=y \
-    CONFIG_IXGBE_DCA=n
+    CONFIG_IXGBE_DCA=n \
+    CONFIG_IXGBE_DCB=y
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/ixgbe/ixgbe.ko
   AUTOLOAD:=$(call AutoLoad,35,ixgbe)
 endef
@@ -1120,9 +1187,10 @@ define KernelPackage/i40e
   KCONFIG:=CONFIG_I40E \
     CONFIG_I40E_VXLAN=n \
     CONFIG_I40E_HWMON=y \
-    CONFIG_I40E_DCA=n
+    CONFIG_I40E_DCA=n \
+    CONFIG_I40E_DCB=y
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/i40e/i40e.ko
-  AUTOLOAD:=$(call AutoProbe,i40e)
+  AUTOLOAD:=$(call AutoLoad,36,i40e,1)
 endef
 
 define KernelPackage/i40e/description
@@ -1130,6 +1198,24 @@ define KernelPackage/i40e/description
 endef
 
 $(eval $(call KernelPackage,i40e))
+
+
+define KernelPackage/ice
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Intel(R) Ethernet Controller E810 Series support
+  DEPENDS:=@PCI_SUPPORT +kmod-ptp
+  KCONFIG:=CONFIG_ICE \
+    CONFIG_ICE_HWTS=n \
+    CONFIG_ICE_SWITCHDEV=y
+  FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/ice/ice.ko
+  AUTOLOAD:=$(call AutoProbe,ice)
+endef
+
+define KernelPackage/ice/description
+  Kernel modules for Intel(R) Ethernet Controller E810 Series
+endef
+
+$(eval $(call KernelPackage,ice))
 
 
 define KernelPackage/iavf
@@ -1525,6 +1611,28 @@ endef
 
 $(eval $(call KernelPackage,bnx2x))
 
+define KernelPackage/bnxt-en
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Broadcom NetXtreme-C/E network driver
+  DEPENDS:=@PCI_SUPPORT +kmod-hwmon-core +kmod-lib-crc32c +kmod-mdio +kmod-ptp
+  FILES:=$(LINUX_DIR)/drivers/net/ethernet/broadcom/bnxt/bnxt_en.ko
+  KCONFIG:= \
+	  CONFIG_BNXT \
+	  CONFIG_BNXT_SRIOV=y \
+	  CONFIG_BNXT_FLOWER_OFFLOAD=y \
+	  CONFIG_BNXT_DCB=y \
+	  CONFIG_BNXT_HWMON=y
+  AUTOLOAD:=$(call AutoProbe,bnxt_en)
+endef
+
+define KernelPackage/bnxt-en/description
+  Supports Broadcom NetXtreme-C/E based Ethernet NICs including:
+  * BCM573xx
+  * BCM574xx
+endef
+
+$(eval $(call KernelPackage,bnxt-en))
+
 define KernelPackage/be2net
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Broadcom Emulex OneConnect 10Gbps NIC
@@ -1554,11 +1662,11 @@ define KernelPackage/mlx4-core
 	$(LINUX_DIR)/drivers/net/ethernet/mellanox/mlx4/mlx4_core.ko \
 	$(LINUX_DIR)/drivers/net/ethernet/mellanox/mlx4/mlx4_en.ko
   KCONFIG:= CONFIG_MLX4_EN \
-	CONFIG_MLX4_EN_DCB=n \
+	CONFIG_MLX4_EN_DCB=y \
 	CONFIG_MLX4_CORE=y \
 	CONFIG_MLX4_CORE_GEN2=y \
 	CONFIG_MLX4_DEBUG=n
-  AUTOLOAD:=$(call AutoLoad,36,mlx4_core mlx4_en,1)
+  AUTOLOAD:=$(call AutoLoad,45,mlx4_core mlx4_en,1)
 endef
 
 define KernelPackage/mlx4-core/description
@@ -1574,7 +1682,7 @@ define KernelPackage/mlx5-core
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/mellanox/mlx5/core/mlx5_core.ko
   KCONFIG:= CONFIG_MLX5_CORE \
 	CONFIG_MLX5_CORE_EN=y \
-	CONFIG_MLX5_CORE_EN_DCB=n \
+	CONFIG_MLX5_CORE_EN_DCB=y \
 	CONFIG_MLX5_CORE_IPOIB=n \
 	CONFIG_MLX5_EN_ARFS=n \
 	CONFIG_MLX5_EN_IPSEC=n \
@@ -1589,7 +1697,7 @@ define KernelPackage/mlx5-core
 	CONFIG_MLX5_TC_CT=n \
 	CONFIG_MLX5_TLS=n \
 	CONFIG_MLX5_VFIO_PCI=n
-  AUTOLOAD:=$(call AutoLoad,36,mlx5_core,1)
+  AUTOLOAD:=$(call AutoLoad,45,mlx5_core,1)
 endef
 
 define KernelPackage/mlx5-core/description
@@ -1692,9 +1800,7 @@ define KernelPackage/mlxsw-spectrum
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/mellanox/mlxsw/mlxsw_spectrum.ko
   KCONFIG:= \
   CONFIG_MLXSW_SPECTRUM \
-  CONFIG_MLXSW_SPECTRUM_DCB=y \
-  CONFIG_NET_SWITCHDEV=y \
-  CONFIG_DCB=y
+  CONFIG_MLXSW_SPECTRUM_DCB=y
   AUTOLOAD:=$(call AutoProbe,mlxsw_spectrum)
 endef
 
@@ -1729,7 +1835,8 @@ define KernelPackage/qlcnic
   KCONFIG:= \
 	CONFIG_QLCNIC \
 	CONFIG_QLCNIC_HWMON=y \
-	CONFIG_QLCNIC_SRIOV=y
+	CONFIG_QLCNIC_SRIOV=y \
+	CONFIG_QLCNIC_DCB=y
   FILES:=$(LINUX_DIR)/drivers/net/ethernet/qlogic/qlcnic/qlcnic.ko
   AUTOLOAD:=$(call AutoProbe,qlcnic)
 endef

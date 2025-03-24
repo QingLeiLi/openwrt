@@ -156,7 +156,7 @@ BUILD_SUFFIX:=$(call qstrip,$(CONFIG_BUILD_SUFFIX))
 SUBDIR:=$(patsubst $(TOPDIR)/%,%,${CURDIR})
 BUILD_SUBDIR:=$(patsubst $(TOPDIR)/%,%,${CURDIR})
 # 获取核心数，使用了两种方式兼容
-NPROC:=$(shell sysctl -n hw.ncpu 2>/dev/null || nproc)
+NPROC=$(shell sysctl -n hw.ncpu 2>/dev/null || nproc)
 export SHELL:=/usr/bin/env bash
 
 # 如果makefile的路径中包含 package/，则认为是包的build
