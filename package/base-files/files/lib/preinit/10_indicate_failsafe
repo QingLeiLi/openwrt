@@ -2,20 +2,39 @@
 # Copyright (C) 2010 Vertical Communications
 
 # commands for emitting messages to network in failsafe mode
+# 故障安全模式（Failsafe Mode） 的触发和指示逻辑，用于在系统初始化失败时提供恢复手段
+# 激活逻辑：
+# 	用户主动触发：开机时按复位按钮（具体按键由硬件决定）
+# 	系统自动检测：preinit 阶段关键服务失败
+# 	网络请求触发：通过 UDP 包发送 failsafe 指令
+# 多通道报警机制
+# 	硬件指示灯
+# 	控制台：串口/TTY输出
+# 	网络：UDP广播
+# 		通过 preinit_net_echo 发送到 255.255.255.255:4919（需搭配 netconsole）
+# 	修改主机名
 
+
+# LED 状态指示，依赖 /etc/diag.sh，会被 openwrt/package/base-files/files/lib/preinit/02_default_set_state.sh 初始化
 indicate_failsafe_led () {
 	set_state failsafe
 }
 
 indicate_failsafe() {
 	[ "$pi_preinit_no_failsafe" = "y" ] && return
+	# 列出当前活动控制台设备
 	local consoles="$(cat /sys/class/tty/console/active)"
 	[ -n "$consoles" ] || consoles=console
+	# 向所有活动控制台输出警告
 	for console in $consoles; do
 		[ -c "/dev/$console" ] && echo "- failsafe -" >"/dev/$console"
 	done
+	# 网络广播
+	# 定义在 openwrt/package/base-files/files/lib/preinit/10_indicate_preinit
 	preinit_net_echo "Entering Failsafe!\n"
+	# 触发LED指示
 	indicate_failsafe_led
+	# 修改主机名
 	echo OpenWrt-failsafe > /proc/sys/kernel/hostname
 }
 

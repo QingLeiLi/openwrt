@@ -1,8 +1,13 @@
+# 收集设备树（Device Tree）信息，主要用于提取设备的硬件标识信息
+# 为后续脚本提供决策依据，示例：根据板载型号加载不同驱动
 do_sysinfo_generic() {
+	# 检查设备树是否存在
 	[ -d /proc/device-tree ] || return
 	mkdir -p /tmp/sysinfo
+	# 提取设备兼容性标识（优先使用）
 	[ -e /tmp/sysinfo/board_name ] || \
 		echo "$(strings /proc/device-tree/compatible | head -1)" > /tmp/sysinfo/board_name
+	# 提取设备型号（备用）
 	[ ! -e /tmp/sysinfo/model -a -e /proc/device-tree/model ] && \
 		echo "$(cat /proc/device-tree/model)" > /tmp/sysinfo/model
 }

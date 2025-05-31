@@ -1,5 +1,10 @@
+# 定义系统初始化阶段的行为，执行 /etc/init.d/rcS 脚本，并传递参数 S boot
 ::sysinit:/etc/init.d/rcS S boot
+# 定义系统关机阶段的行为，执行 /etc/init.d/rcS 脚本，并传递参数 K shutdown
 ::shutdown:/etc/init.d/rcS K shutdown
+#  定义串口终端登录行为
 @GRUB_SERIAL@::askfirst:/usr/libexec/login.sh
+# 定义虚拟控制台（hvc0）的登录行为
 hvc0::askfirst:/usr/libexec/login.sh
+# 定义物理控制台（tty1）的登录行为
 tty1::askfirst:/usr/libexec/login.sh

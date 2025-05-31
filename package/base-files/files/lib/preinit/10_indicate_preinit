@@ -1,24 +1,31 @@
 # Copyright (C) 2006 OpenWrt.org
 # Copyright (C) 2010 Vertical Communications
 
+# 初始化网络设备，启用网络，设置IP
 preinit_ip_config() {
 	local netdev vid
 
+	# 提取主接口名 (如 eth0.100 → eth0)
 	netdev=${1%\.*}
+	# 提取VLAN ID (如 eth0.100 → 100)
 	vid=${1#*\.}
 
 	if [ "$vid" = "$netdev" ]; then
 		vid=
 	fi
 
+	# 判断设备是否可用
 	grep -q "$netdev" /proc/net/dev || return
 
+	# 存在 vid 则设置 vlan
 	if [ -n "$vid" ]; then
 		ip link add link $netdev name $1 type vlan id $vid
 	fi
 
+	# 激活网口
 	ip link set dev $netdev up
 	if [ -n "$vid" ]; then
+		# 启用子接口
 		ip link set dev $1 up
 	fi
 	ip -4 address add $pi_ip/$pi_netmask broadcast $pi_broadcast dev $1
@@ -92,9 +99,11 @@ preinit_config_port() {
 	ip link set "$original" name "$netdev"
 }
 
+# 级网络初始化的核心逻辑，主要完成 网络设备重命名 和 交换机配置
 preinit_config_board() {
 	/bin/board_detect /tmp/board.json
 
+	# 没有生成json文件，直接退出
 	[ -f "/tmp/board.json" ] || return
 
 	. /usr/share/libubox/jshn.sh
@@ -110,6 +119,7 @@ preinit_config_board() {
 		json_select "network_device"
 			json_select "$netdev"
 				json_get_vars path path
+				# eth接口冲突，重命名为其他名字
 				if [ -n "$path" -a -h "/sys/class/net/$netdev" ]; then
 					ip link set "$netdev" down
 					ip link set "$netdev" name eth$((++max_eth))
@@ -166,18 +176,24 @@ preinit_config_board() {
 	preinit_ip_config $pi_ifname
 }
 
+# 网络初始化，主要用于在系统启动早期配置网络接口
 preinit_ip() {
+	# 禁用故障安全模式
 	[ "$pi_preinit_no_failsafe" = "y" ] && return
 
+	# 这里是 pi_ifname 的兜底
 	# if the preinit interface isn't specified and ifname is set in
 	# preinit.arch use that interface
 	if [ -z "$pi_ifname" ]; then
+		# $ifname 架构默认接口名，由/etc/preinit.arch 定义
 		pi_ifname=$ifname
 	fi
 
 	if [ -n "$pi_ifname" ]; then
+		# 为指定接口应用基础网络配置
 		preinit_ip_config $pi_ifname
 	elif [ -d "/etc/board.d/" ]; then
+		# 执行板级特定配置脚本
 		preinit_config_board
 	fi
 
@@ -204,11 +220,22 @@ preinit_ip_deconfig() {
 	}
 }
 
+# 预初始化阶段的网络消息广播工具，主要用于在系统早期启动阶段通过网络发送状态消息。
+# 在满足多重条件时，通过 UDP 广播消息（常用于调试/状态通知）
+# 	启动阶段网络调试
+# 	故障安全模式(failsafe)状态通知
+# 	网络接口准备就绪的广播通知
 preinit_net_echo() {
+	# pi_ifname 是 预初始化使用的网络接口名
+	# 由 openwrt/package/base-files/Makefile 生成的配置文件（/lib/preinit/00_preinit.conf）初始化
+	# pi_ifname 变量需要存在，而且在网络设备中存在
 	[ -n "$pi_ifname" ] && grep -q "$pi_ifname" /proc/net/dev && {
 		{
+			# 显式启用网络消息 或 故障安全模式且未禁用 都需要发送消息
 			[ "$pi_preinit_net_messages" = "y" ] || {
+				# 当前是否处于故障安全模式
 				[ "$pi_failsafe_net_message" = "true" ] &&
+					# 是否禁用故障安全模式
 					[ "$pi_preinit_no_failsafe_netmsg" != "y" ]
 			}
 		} && netmsg $pi_broadcast "$1"

@@ -17,6 +17,7 @@ boot_hook_splice_finish() {
 
 boot_hook_init() {
 	local hook="${1}_hook"
+	# -n 导出变量但不传递到子进程
 	export -n "PI_STACK_LIST=${PI_STACK_LIST:+$PI_STACK_LIST }$hook"
 	export -n "$hook="
 }
@@ -31,25 +32,36 @@ boot_hook_add() {
 	}
 }
 
+# 从钩子列表（hook）中弹出首个函数名
 boot_hook_shift() {
+	# 构造完整的钩子变量名（如 "preinit_main_hook"）
 	local hook="${1}_hook"
+	# 接收结果的变量名（由调用者指定）
 	local rvar="${2}"
 
+	# 获取钩子列表的值（通过动态变量名访问）
 	local v; eval "v=\$$hook"
+	# 如果列表非空
 	[ -n "$v" ] && {
+		# 提取第一个函数名（删除第一个空格后的所有内容）
 		local first="${v%% *}"
 
 		[ "$v" != "${v#* }" ] && \
+			# 更新钩子变量为剩余列表
 			export -n "$hook=${v#* }" || \
+			# 否则清空钩子变量
 			export -n "$hook="
 
+		# 将第一个函数名存入调用者指定的变量
 		export -n "$rvar=$first"
 		return 0
 	}
 
+	# 列表为空时返回失败
 	return 1
 }
 
+# 用于动态执行指定钩子（hook）中注册的所有函数
 boot_run_hook() {
 	local hook="$1"
 	local func

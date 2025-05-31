@@ -2,6 +2,7 @@
 # Copyright (C) 2006-2016 OpenWrt.org
 # Copyright (C) 2010 Vertical Communications
 
+# 可能是 preinit 依赖 init，正常Linux启动流程会先执行 init（会设置PREINIT环境变量），如果没有执行，需要兜底执行一下
 [ -z "$PREINIT" ] && exec /sbin/init
 
 export PATH="%PATH%"
@@ -10,20 +11,64 @@ export PATH="%PATH%"
 . /lib/functions/preinit.sh
 . /lib/functions/system.sh
 
+# 为指定的启动阶段（参数 $1）创建一个空的钩子列表，并将该钩子名称注册到全局的 PI_STACK_LIST 中，后续可以通过 boot_hook_add() 向这个钩子添加具体任务
+# 最早期的预初始化，执行最基础的硬件初始化和关键功能
+# 	控制台初始化
+# 	基础设备检测
+# 	紧急恢复模式判断
 boot_hook_init preinit_essential
+# 主预初始化阶段，完成大部分预初始化工作
+# 	加载内核模块
+# 	初始化网络
+# 	挂载临时文件系统
+# 	启动基础服务
 boot_hook_init preinit_main
+# 故障安全模式处理，当系统启动异常时提供恢复选项
+# 	等待用户按键中断
+# 	进入故障安全控制台
+# 	提供最小化网络功能
 boot_hook_init failsafe
+# Initramfs 相关操作，处理临时根文件系统相关任务
+# 	Initramfs 解压和挂载
+# 	早期用户空间设备初始化
+# 	过渡到真实根文件系统
 boot_hook_init initramfs
+# 根文件系统挂载前，准备和挂载最终根文件系统
+# 	检测和验证根设备
+# 	处理加密根文件系统
+# 	执行 switch_root
 boot_hook_init preinit_mount_root
 
+# 处理该目录下的所有文件（不递归子目录）
+# 会注册各种 hook
+# pi 是 preInit 的缩写
 for pi_source_file in /lib/preinit/*; do
+	# 执行文件，等价于 source
 	. $pi_source_file
 done
 
+# 用于动态执行指定钩子（hook）中注册的所有函数
 boot_run_hook preinit_essential
 
+# 控制是否跳过下一个文件系统挂载操作
+# 在故障安全模式中可能被设置为 true
 pi_mount_skip_next=false
+# 标记 JFFS2 文件系统是否成功挂载
+# JFFS2 是 OpenWrt 常用的可写闪存文件系统
+# 影响配置持久化和日志存储的可用性
 pi_jffs2_mount_success=false
+# 控制是否显示故障安全模式的网络提示信息
 pi_failsafe_net_message=false
+
+# 以上三者在启动流程中的协同作用
+# 正常启动流程:
+# pi_mount_skip_next=false → 正常挂载文件系统
+# pi_jffs2_mount_success=true → JFFS2 挂载成功
+# pi_failsafe_net_message 保持 false（不显示故障安全提示）
+
+# 故障安全模式:
+# pi_mount_skip_next=true → 跳过某些挂载操作
+# pi_jffs2_mount_success=false → 闪存可能损坏
+# pi_failsafe_net_message=true → 显示帮助信息
 
 boot_run_hook preinit_main

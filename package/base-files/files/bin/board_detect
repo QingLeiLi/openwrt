@@ -1,12 +1,21 @@
 #!/bin/sh
 
+# 加载板级配置，主要处理硬件配置文件的加载优先级和执行流程
+# 运行 /etc/board.d/ 下的脚本，生成配置文件到 $1 指定的文件中
+
 CFG=$1
 
+# 检查是否指定了配置文件，没有就使用默认值
 [ -n "$CFG" ] || CFG=/etc/board.json
 
+# -d /etc/board.d/ 需要为有效目录
+# ! -s 指定的配置文件需要为空
+# -a 是逻辑且
 [ -d "/etc/board.d/" -a ! -s "$CFG" ] && {
 	for a in $(ls /etc/board.d/*); do
+		# 跳过空文件
 		[ -s $a ] || continue;
+		# 使用子shell执行（避免污染当前环境）
 		$(. $a)
 	done
 }
