@@ -12,11 +12,15 @@ uci_apply_defaults() {
 	cd /etc/uci-defaults || return 0
 	files="$(ls)"
 	[ -z "$files" ] && return 0
+	applied=""
 	for file in $files; do
 		# 只有在首次启动应该执行，执行一次就删掉
-		( . "./$(basename $file)" ) && rm -f "$file"
+		# ( . "./$(basename $file)" ) && rm -f "$file"
+		( . "./$(basename $file)" ) && applied="$applied $file"
 	done
 	uci commit
+	sync
+	rm -f $applied
 }
 
 boot() {

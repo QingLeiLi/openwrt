@@ -1,6 +1,9 @@
 'use strict';
 
-import { append, append_raw, append_vars, dump_config, flush_config, set_default } from 'wifi.common';
+import {
+	append, append_raw, append_vars, dump_config, flush_config, set_default,
+	wiphy_info, wiphy_band
+} from 'wifi.common';
 import { validate } from 'wifi.validate';
 import * as netifd from 'wifi.netifd';
 import * as iface from 'wifi.iface';
@@ -85,50 +88,50 @@ function device_cell_density_append(config) {
 	switch (config.hw_mode) {
 	case 'b':
 		if (config.cell_density == 1) {
-			config.supported_rates = [ 5500, 11000 ];
-			config.basic_rates = [ 5500, 11000 ];
+			config.supported_rates ??= [ 5500, 11000 ];
+			config.basic_rates ??= [ 5500, 11000 ];
 		} else if (config.cell_density > 2) {
-			config.supported_rates = [ 11000 ];
-			config.basic_rates = [ 11000 ];
+			config.supported_rates ??= [ 11000 ];
+			config.basic_rates ??= [ 11000 ];
 		}
 		;;
 	case 'g':
 		if (config.cell_density in [ 0, 1 ]) {
 			if (!config.legacy_rates) {
-				config.supported_rates = [ 6000, 9000, 12000, 18000, 24000, 36000, 48000, 54000 ];
-				config.basic_rates = [ 6000, 12000, 24000 ];
+				config.supported_rates ??= [ 6000, 9000, 12000, 18000, 24000, 36000, 48000, 54000 ];
+				config.basic_rates ??= [ 6000, 12000, 24000 ];
 			} else if (config.cell_density == 1) {
-				config.supported_rates = [ 5500, 6000, 9000, 11000, 12000, 18000, 24000, 36000, 48000, 54000 ];
-				config.basic_rates = [ 5500, 11000 ];
+				config.supported_rates ??= [ 5500, 6000, 9000, 11000, 12000, 18000, 24000, 36000, 48000, 54000 ];
+				config.basic_rates ??= [ 5500, 11000 ];
 			}
 		} else if (config.cell_density == 2 || (config.cell_density > 3 && config.legacy_rates)) {
 			if (!config.legacy_rates) {
-				config.supported_rates = [ 12000, 18000, 24000, 36000, 48000, 54000 ];
-				config.basic_rates = [ 12000, 24000 ];
+				config.supported_rates ??= [ 12000, 18000, 24000, 36000, 48000, 54000 ];
+				config.basic_rates ??= [ 12000, 24000 ];
 			} else {
-				config.supported_rates = [ 11000, 12000, 18000, 24000, 36000, 48000, 54000 ];
-				config.basic_rates = [ 11000 ];
+				config.supported_rates ??= [ 11000, 12000, 18000, 24000, 36000, 48000, 54000 ];
+				config.basic_rates ??= [ 11000 ];
 			}
 		} else if (config.cell_density > 2) {
-			 config.supported_rates = [ 24000, 36000, 48000, 54000 ];
-			 config.basic_rates = [ 24000 ];
+			 config.supported_rates ??= [ 24000, 36000, 48000, 54000 ];
+			 config.basic_rates ??= [ 24000 ];
 		}
 		;;
 	case 'a':
 		switch (config.cell_density) {
 		case 1:
-			config.supported_rates = [ 6000, 9000, 12000, 18000, 24000, 36000, 48000, 54000 ];
-			config.basic_rates = [ 6000, 12000, 24000 ];
+			config.supported_rates ??= [ 6000, 9000, 12000, 18000, 24000, 36000, 48000, 54000 ];
+			config.basic_rates ??= [ 6000, 12000, 24000 ];
 			break;
 
 		case 2:
-			config.supported_rates = [ 12000, 18000, 24000, 36000, 48000, 54000 ];
-			config.basic_rates = [ 12000, 24000 ];
+			config.supported_rates ??= [ 12000, 18000, 24000, 36000, 48000, 54000 ];
+			config.basic_rates ??= [ 12000, 24000 ];
 			break;
 
 		case 3:
-			config.supported_rates = [ 24000, 36000, 48000, 54000 ];
-			config.basic_rates = [ 24000 ];
+			config.supported_rates ??= [ 24000, 36000, 48000, 54000 ];
+			config.basic_rates ??= [ 24000 ];
 			break;
 		}
 	}
@@ -272,7 +275,7 @@ function device_htmode_append(config) {
 			];
 
 			for (let k, v in eht_center_seg0_map)
-				if (v[0] <= config.channel) {
+				if (config.channel <= v[0]) {
 					config.eht_oper_centr_freq_seg0_idx = v[1];
 					break;
 				}
@@ -300,7 +303,7 @@ function device_htmode_append(config) {
 			config.short_gi_160 = 0;
 		}
 
-		config.tx_queue_data2_burst = '2.0';
+		set_default(config, 'tx_queue_data2_burst', '2.0');
 
 		let vht_capab = phy_capabilities.vht_capa;
 		
@@ -436,23 +439,19 @@ function device_extended_features(data, flag) {
 	return !!(data[flag / 8] | (1 << (flag % 8)));
 }
 
-function device_capabilities(phy) {
-	let idx = +fs.readfile(`/sys/class/ieee80211/${phy}/index`);
-	phy = nl80211.request(nl80211.const.NL80211_CMD_GET_WIPHY, nl80211.const.NLM_F_DUMP, { wiphy: idx, split_wiphy_dump: true });
-	if (!phy)
-		return;
-	for (let band in phy.wiphy_bands) {
-		if (!band)
+function device_capabilities(config) {
+	let phy = config.phy;
+
+	phy = wiphy_info(phy);
+	let band = wiphy_band(phy, config.band);
+
+	phy_capabilities.ht_capa = band.ht_capa ?? 0;
+	phy_capabilities.vht_capa = band.vht_capa ?? 0;
+	for (let iftype in band.iftype_data) {
+		if (!iftype.iftypes.ap)
 			continue;
-		phy_capabilities.ht_capa = band.ht_capa ?? 0;
-		phy_capabilities.vht_capa = band.vht_capa ?? 0;
-		for (let iftype in band.iftype_data) {
-			if (!iftype.iftypes.ap)
-				continue;
-			phy_capabilities.he_mac_cap = iftype.he_cap_mac;
-			phy_capabilities.he_phy_cap = iftype.he_cap_phy;
-		}
-		break;
+		phy_capabilities.he_mac_cap = iftype.he_cap_mac;
+		phy_capabilities.he_phy_cap = iftype.he_cap_phy;
 	}
 
 	phy_features.ftm_responder = device_extended_features(phy.extended_features, NL80211_EXT_FEATURE_ENABLE_FTM_RESPONDER);
@@ -460,10 +459,10 @@ function device_capabilities(phy) {
 }
 
 function generate(config) {
-	if (!config.phy)
+	if (!config)
 		die(`${config.path} is an unknown phy`);
 
-	device_capabilities(config.phy);
+	device_capabilities(config);
 
 	append('driver', 'nl80211');
 
@@ -484,7 +483,8 @@ function generate(config) {
 	append_vars(config, [ 'noscan' ]);
 
 	/* airtime */
-	append_vars(config, [ 'airtime_mode' ]);
+	if (config.airtime_mode)
+		append_vars(config, [ 'airtime_mode' ]);
 
 	/* assoc/thresholds */
 	append_vars(config, [ 'rssi_reject_assoc_rssi', 'rssi_ignore_probe_request', 'iface_max_num_sta', 'no_probe_resp_if_max_sta' ]);
@@ -523,11 +523,11 @@ function generate(config) {
 }
 
 let iface_idx = 0;
-function setup_interface(interface, config, vlans, stas, phy_features, fixup) {
+function setup_interface(interface, data, config, vlans, stas, phy_features, fixup) {
 	config = { ...config, fixup };
 
 	config.idx = iface_idx++;
-	ap.generate(interface, config, vlans, stas, phy_features);
+	ap.generate(interface, data, config, vlans, stas, phy_features);
 }
 
 export function setup(data) {
@@ -547,6 +547,7 @@ export function setup(data) {
 	if (data.config.macaddr_base)
 		append('\n#macaddr_base', data.config.macaddr_base);
 
+	let has_ap;
 	for (let k, interface in data.interfaces) {
 		if (interface.config.mode != 'ap')
 			continue;
@@ -556,9 +557,10 @@ export function setup(data) {
 
 		let owe = interface.config.encryption == 'owe' && interface.config.owe_transition;
 
-		setup_interface(k, interface.config, interface.vlans, interface.stas, phy_features, owe ? 'owe' : null );
+		setup_interface(k, data, interface.config, interface.vlans, interface.stas, phy_features, owe ? 'owe' : null );
 		if (owe)
-			setup_interface(k, interface.config, interface.vlans, interface.stas, phy_features, 'owe-transition');
+			setup_interface(k, data, interface.config, interface.vlans, interface.stas, phy_features, 'owe-transition');
+		has_ap = true;
 	}
 
 	let config = dump_config(file_name);
@@ -566,13 +568,13 @@ export function setup(data) {
 	let msg = {
 		phy: data.phy,
 		radio: data.config.radio,
-		config: file_name,
+		config: has_ap ? file_name : "",
 		prev_config: file_name + '.prev'
 	};
 	let ret = global.ubus.call('hostapd', 'config_set', msg);
 
 	if (ret)
 		netifd.add_process('/usr/sbin/hostapd', ret.pid, true, true);
-	else
+	else if (fs.access('/usr/sbin/hostapd', 'x'))
 		netifd.setup_failed('HOSTAPD_START_FAILED');
 };

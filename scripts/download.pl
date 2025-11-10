@@ -192,6 +192,7 @@ sub download
 	my $download_filename = shift;
 	# 获取剩余所有的参数
 	my @additional_mirrors = @_;
+	my @cmd;
 
 	# 去掉镜像末尾的 /
 	$mirror =~ s!/$!!;
@@ -240,7 +241,11 @@ sub download
 			}
 		};
 	} else {
-		my @cmd = download_cmd("$mirror/$download_filename", $download_filename, @additional_mirrors);
+		if ($mirror =~ /a=snapshot/) {
+			@cmd = download_cmd("$mirror", $download_filename, @additional_mirrors);
+		} else {
+			@cmd = download_cmd("$mirror/$download_filename", $download_filename, @additional_mirrors);
+		}
 		print STDERR "+ ".join(" ",@cmd)."\n";
 		open(FETCH_FD, '-|', @cmd) or die "Cannot launch aria2c, curl or wget.\n";
 		$hash_cmd and do {
@@ -356,14 +361,23 @@ if (-f "$target/$filename") {
 $download_tool = select_tool();
 
 # 如果文件不存在，从镜像下载
+my $mirror = shift @mirrors;
+
+# Try snapshot original source last
+if ($mirror =~ /snapshot/) {
+	push @mirrors, $mirror;
+	$mirror = shift @mirrors;
+}
+
 while (!-f "$target/$filename") {
-	my $mirror = shift @mirrors;
 	$mirror or die "No more mirrors to try - giving up.\n";
 
 	download($mirror, $url_filename, @mirrors);
 	if (!-f "$target/$filename" && $url_filename ne $filename) {
 		download($mirror, $filename, @mirrors);
 	}
+
+	$mirror = shift @mirrors;
 }
 
 $SIG{INT} = \&cleanup;

@@ -140,6 +140,13 @@ define U-Boot/OLIMEX_A13_SOM
   BUILD_DEVICES:=olimex_a13-olimex-som
 endef
 
+define U-Boot/licheepi_nano
+  BUILD_SUBTARGET:=arm926ejs
+  NAME:=LicheePi Nano
+  UENV:=f1c
+  BUILD_DEVICES:=licheepi-nano
+endef
+
 define U-Boot/Linksprite_pcDuino
   BUILD_SUBTARGET:=cortexa8
   NAME:=Linksprite pcDuino
@@ -257,6 +264,13 @@ define U-Boot/pangolin
   UENV:=pangolin
 endef
 
+define U-Boot/popstick
+  BUILD_SUBTARGET:=arm926ejs
+  NAME:=PopStick
+  UENV:=f1c
+  BUILD_DEVICES:=popstick-v1.1
+endef
+
 define U-Boot/libretech_all_h3_cc_h5
   BUILD_SUBTARGET:=cortexa53
   NAME:=Libre Computer ALL-H3-CC H5
@@ -323,7 +337,6 @@ define U-Boot/sopine_baseboard
   ATF:=a64
 endef
 
-
 define U-Boot/orangepi_zero_plus
   BUILD_SUBTARGET:=cortexa53
   NAME:=Xunlong Orange Pi Zero Plus
@@ -347,6 +360,15 @@ define U-Boot/orangepi_zero2
   NAME:=Xunlong Orange Pi Zero2
   BUILD_DEVICES:=xunlong_orangepi-zero2
   DEPENDS:=+PACKAGE_u-boot-orangepi_zero2:trusted-firmware-a-sunxi-h616
+  UENV:=h616
+  ATF:=h616
+endef
+
+define U-Boot/orangepi_zero2w
+  BUILD_SUBTARGET:=cortexa53
+  NAME:=Xunlong Orange Pi Zero2W
+  BUILD_DEVICES:=xunlong_orangepi-zero2w
+  DEPENDS:=+PACKAGE_u-boot-orangepi_zero2w:trusted-firmware-a-sunxi-h616
   UENV:=h616
   ATF:=h616
 endef
@@ -402,6 +424,7 @@ UBOOT_TARGETS := \
 	Marsboard_A10 \
 	Mele_M9 \
 	OLIMEX_A13_SOM \
+	licheepi_nano \
 	LicheePi_Zero \
 	Linksprite_pcDuino \
 	Linksprite_pcDuino3 \
@@ -425,8 +448,10 @@ UBOOT_TARGETS := \
 	orangepi_2 \
 	orangepi_pc2 \
 	orangepi_zero2 \
+	orangepi_zero2w \
 	orangepi_zero3 \
 	pangolin \
+	popstick \
 	pine64_plus \
 	Sinovoip_BPI_M3 \
 	sopine_baseboard \

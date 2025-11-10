@@ -24,7 +24,8 @@ define Package/Default
   # $(patsubst pattern,replacement,text) 用于在 text 中匹配 pattern，并替换为 replacement
   # 后面一个 patsubst 先检查当前包所在路径是不是以 $(TOPDIR)/package/ 开头的，如果是则替换为 feeds/base/ 开头的
   # 前面这个 patsubst 则是转为相对于 TOPDIR 的相对路径
-  SOURCE:=$(patsubst $(TOPDIR)/%,%,$(patsubst $(TOPDIR)/package/%,feeds/base/%,$(CURDIR)))
+  # SOURCE:=$(patsubst $(TOPDIR)/%,%,$(patsubst $(TOPDIR)/package/%,feeds/base/%,$(CURDIR)))
+  SOURCE:=$(patsubst $(TOPDIR)/%,%,$(if $(__pkg_source_makefile),$(__pkg_source_makefile),$(CURDIR)))
   ifneq ($(PKG_VERSION),)
     ifneq ($(PKG_RELEASE),)
       VERSION:=$(PKG_VERSION)-r$(PKG_RELEASE)

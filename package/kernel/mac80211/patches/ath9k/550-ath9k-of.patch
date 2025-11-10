@@ -1,6 +1,6 @@
 --- a/drivers/net/wireless/ath/ath9k/init.c
 +++ b/drivers/net/wireless/ath/ath9k/init.c
-@@ -29,6 +29,11 @@
+@@ -28,6 +28,11 @@
  
  #include "ath9k.h"
  
@@ -12,7 +12,7 @@
  struct ath9k_eeprom_ctx {
  	struct completion complete;
  	struct ath_hw *ah;
-@@ -243,6 +248,81 @@ static unsigned int ath9k_reg_rmw(void *
+@@ -242,6 +247,81 @@ static unsigned int ath9k_reg_rmw(void *
  	return val;
  }
  
@@ -94,7 +94,7 @@
  /**************************/
  /*     Initialization     */
  /**************************/
-@@ -670,6 +750,7 @@ static int ath9k_of_init(struct ath_soft
+@@ -626,6 +706,7 @@ static int ath9k_of_init(struct ath_soft
  	struct ath_common *common = ath9k_hw_common(ah);
  	enum ath_bus_type bus_type = common->bus_ops->ath_bus_type;
  	char eeprom_name[100];
@@ -102,7 +102,7 @@
  	int ret;
  
  	if (!of_device_is_available(np))
-@@ -677,6 +758,46 @@ static int ath9k_of_init(struct ath_soft
+@@ -633,6 +714,43 @@ static int ath9k_of_init(struct ath_soft
  
  	ath_dbg(common, CONFIG, "parsing configuration from OF node\n");
  
@@ -115,17 +115,15 @@
 +#ifdef CONFIG_ATH79
 +	if (ah->hw_version.devid == AR5416_AR9100_DEVID) {
 +		ah->external_reset = ar913x_wmac_reset;
-+		ah->external_reset();
 +	} else if (ah->hw_version.devid == AR9300_DEVID_AR9330) {
 +		ah->get_mac_revision = ar9330_get_soc_revision;
 +		u32 t = ath79_reset_rr(AR933X_RESET_REG_BOOTSTRAP);
 +		ah->is_clk_25mhz = !(t & AR933X_BOOTSTRAP_REF_CLK_40);
 +		ah->external_reset = ar933x_wmac_reset;
-+		ah->external_reset();
 +	} else if (ah->hw_version.devid == AR9300_DEVID_AR9340) {
 +		ah->get_mac_revision = ath79_get_soc_revision;
 +		u32 t = ath79_reset_rr(AR934X_RESET_REG_BOOTSTRAP);
-+		ah->is_clk_25mhz = !(t & AR933X_BOOTSTRAP_REF_CLK_40);
++		ah->is_clk_25mhz = !(t & AR934X_BOOTSTRAP_REF_CLK_40);
 +	} else if (ah->hw_version.devid == AR9300_DEVID_AR953X) {
 +		ah->get_mac_revision = ath79_get_soc_revision;
 +		/*
@@ -138,7 +136,6 @@
 +		u32 t = ath79_reset_rr(QCA955X_RESET_REG_BOOTSTRAP);
 +		ah->is_clk_25mhz = !(t & QCA955X_BOOTSTRAP_REF_CLK_40);
 +		ah->external_reset = qca955x_wmac_reset;
-+		ah->external_reset();
 +	} else if (ah->hw_version.devid == AR9300_DEVID_QCA956X) {
 +		ah->get_mac_revision = ath79_get_soc_revision;
 +		u32 t = ath79_reset_rr(QCA956X_RESET_REG_BOOTSTRAP);
@@ -149,9 +146,9 @@
  	if (of_property_read_bool(np, "qca,no-eeprom")) {
  		/* ath9k-eeprom-<bus>-<id>.bin */
  		scnprintf(eeprom_name, sizeof(eeprom_name),
-@@ -693,6 +814,17 @@ static int ath9k_of_init(struct ath_soft
- 
- 	of_get_mac_address(np, common->macaddr);
+@@ -651,6 +769,17 @@ static int ath9k_of_init(struct ath_soft
+ 	if (ret == -EPROBE_DEFER)
+ 		return ret;
  
 +	np = of_get_child_by_name(np, "led");
 +	if (np && of_device_is_available(np)) {

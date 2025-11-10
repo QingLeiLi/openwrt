@@ -81,7 +81,7 @@ endef
 # 4: optional link library test (example -lncurses)
 define RequireCHeader
   define Require/$(1)
-    echo 'int main(int argc, char **argv) { $(3); return 0; }' | gcc -include $(1) -x c -o $(TMP_DIR)/a.out - $(4)
+    echo 'int main(int argc, char **argv) { $(3); return 0; }' | $(STAGING_DIR_HOST)/bin/gcc -include $(1) -x c -o $(TMP_DIR)/a.out - $(4)
   endef
 
   $$(eval $$(call Require,$(1),$(2)))
@@ -140,7 +140,8 @@ define SetupHostCommand
 						;; \
 				esac; \
 				# 将其链接到 STAGING_DIR_HOST/bin 目录下
-				ln -sf "$$$$$$$$bin" "$(STAGING_DIR_HOST)/bin/$(strip $(1))"; \
+				# ln -sf "$$$$$$$$bin" "$(STAGING_DIR_HOST)/bin/$(strip $(1))"; \
+				ln -sf "$$$$$$$${bin#$(STAGING_DIR_HOST)/bin/}" "$(STAGING_DIR_HOST)/bin/$(strip $(1))"; \
 				exit 1; \
 			fi; \
 		fi; \

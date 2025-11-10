@@ -32,7 +32,6 @@
 #include <linux/bug.h>
 #include <linux/netfilter.h>
 #include <net/netfilter/nf_flow_table.h>
-#include <linux/of_gpio.h>
 #include <linux/gpio.h>
 #include <linux/gpio/consumer.h>
 
@@ -1652,7 +1651,7 @@ static void fe_remove(struct platform_device *pdev)
 
 static struct platform_driver fe_driver = {
 	.probe = fe_probe,
-	.remove_new = fe_remove,
+	.remove = fe_remove,
 	.driver = {
 		.name = "mtk_soc_eth",
 		.of_match_table = of_fe_match,
