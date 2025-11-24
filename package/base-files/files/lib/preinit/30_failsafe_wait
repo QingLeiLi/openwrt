@@ -1,14 +1,28 @@
 # Copyright (C) 2006-2010 OpenWrt.org
 # Copyright (C) 2010 Vertical Communications
 
+# 带超时的按键等待机制
+# $1 是按键
+# $2 是提示信息
+# $3 是等待时间，单位秒
 fs_wait_for_key () {
+	# 超时时间
 	local timeout=$3
+	# 定时器，会存储实时的剩余时间
 	local timer
+	# 存储用户按键输入
 	local do_keypress
+	# mktemp 来自 busyBox，定义在 openwrt/package/utils/busybox/config/coreutils/Config.in
+	# 可以通过 BUSYBOX_CONFIG_MKTEMP 控制是否启用 mktemp
+	# 临时文件，标记是否按下了目标键
 	local keypress_true="$(mktemp)"
+	# 临时文件，用作进程同步锁
 	local keypress_wait="$(mktemp)"
+	# 临时文件，存储当前倒计时秒数
 	local keypress_sec="$(mktemp)"
+	# 对三个文件进行兜底，以免 mktemp 失败
 	if [ -z "$keypress_wait" ]; then
+		# 固定路径兜底
 		keypress_wait=/tmp/.keypress_wait
 		touch $keypress_wait
 	fi
@@ -21,63 +35,98 @@ fs_wait_for_key () {
 		touch $keypress_sec
 	fi
 
+	# 当收到 INT（Ctrl+C）或 USR1 信号时
+	# 向 keypress_true 文件写入 "true"
+	# 解锁 keypress_wait 文件
+	# 删除 keypress_wait 文件
+	# trap 命令用于捕获和处理信号，是由 shell 提供的内置命令
 	trap "echo 'true' >$keypress_true; lock -u $keypress_wait ; rm -f $keypress_wait" INT
 	trap "echo 'true' >$keypress_true; lock -u $keypress_wait ; rm -f $keypress_wait" USR1
 
+	# 如果 timeout 为空，设为1秒
 	[ -n "$timeout" ] || timeout=1
+	# 如果 timeout 小于1，设为1秒
 	[ $timeout -ge 1 ] || timeout=1
 	timer=$timeout
+	# 对 keypress_wait 文件加锁，用于进程同步
 	lock $keypress_wait
 	{
+		# 当 timer 大于 0 时进入循环
 		while [ $timer -gt 0 ]; do
+			# 设置环境变量
 			pi_failsafe_net_message=true \
+				# 显示提示信息
 				preinit_net_echo "Please press button now to enter failsafe"
+			# 将当前倒计时写入 keypress_sec 文件
 			echo "$timer" >$keypress_sec
+			# 倒计时减1
 			timer=$(($timer - 1))
+			# 休眠1秒
 			sleep 1
 		done
+		# 解锁并删除 keypress_wait 文件
 		lock -u $keypress_wait
 		rm -f $keypress_wait
-	} &
+	} & # & 表示在后台运行
 
+	# 获取活动控制台列表
 	local consoles="$(cat /sys/class/tty/console/active)"
+	# 如果为空，默认使用 "console"
 	[ -n "$consoles" ] || consoles=console
 	for console in $consoles; do
+		# 检查控制台设备文件是否存在，不存在则跳过
 		[ -c "/dev/$console" ] || continue
+		# 如果未禁用故障安全模式，向控制台输出按键提示信息（1是按键，2是提示文本）
 		[ "$pi_preinit_no_failsafe" != "y" ] && echo "Press the [$1] key and hit [enter] $2" > "/dev/$console"
+		# 向控制台输出调试级别选择提示
 		echo "Press the [1], [2], [3] or [4] key and hit [enter] to select the debug level" > "/dev/$console"
 		{
+			# 当 keypress_wait 文件可读时继续循环
 			while [ -r $keypress_wait ]; do
+				# 从文件读取当前倒计时值
 				timer="$(cat $keypress_sec)"
 
+				# timer 如果为空，设为1
 				[ -n "$timer" ] || timer=1
+				# 去除空格
 				timer="${timer%%\ *}"
+				# 如果小于1，设为1
 				[ $timer -ge 1 ] || timer=1
+				# 清空按键变量
 				do_keypress=""
 				{
+					# 从控制台读取用户输入，超时时间为 timer 秒
 					read -t "$timer" do_keypress < "/dev/$console"
 					case "$do_keypress" in
+					# 如果输入匹配第1个参数，向 keypress_true 写入 "true"
 					$1)
 						echo "true" >$keypress_true
 						;;
+					# 如果输入是1-4，将值写入 /tmp/debug_level 文件
 					1 | 2 | 3 | 4)
 						echo "$do_keypress" >/tmp/debug_level
 						;;
+					# 忽略其他情况
 					*)
 						continue;
 						;;
 					esac
+					# 解锁并删除 keypress_wait 文件
 					lock -u $keypress_wait
 					rm -f $keypress_wait
 				}
 			done
-		} &
+		} & # & 表示后台运行
 	done
+	# 等待 keypress_wait 文件锁释放（阻塞等待）
 	lock -w $keypress_wait
 
+	# 默认返回1（未按键）
 	keypressed=1
+	# 如果 keypress_true 文件内容为 "true"，返回0（已按键）
 	[ "$(cat $keypress_true)" = "true" ] && keypressed=0
 
+	# 清除之前设置的信号处理器
 	trap - INT
 	trap - USR1
 
@@ -89,15 +138,21 @@ fs_wait_for_key () {
 }
 
 failsafe_wait() {
+	# 初始化 FAILSAFE 变量为空
 	FAILSAFE=
+	# 如果禁用了故障安全模式，调用 fs_wait_for_key 函数等待按键（不指定特定按键）后直接返回
 	[ "$pi_preinit_no_failsafe" = "y" ] && {
 		fs_wait_for_key "" "" $fs_failsafe_wait_timeout
 		return
 	}
+	# 检查内核启动参数中是否包含 failsafe=，如果有则设置并导出 FAILSAFE=true
 	grep -q 'failsafe=' /proc/cmdline && FAILSAFE=true && export FAILSAFE
 	if [ "$FAILSAFE" != "true" ]; then
+		# 等待用户按 'f' 键进入故障安全模式，如果按下则设置 FAILSAFE=true
 		fs_wait_for_key f 'to enter failsafe mode' $fs_failsafe_wait_timeout && FAILSAFE=true
+		# 如果存在硬件故障安全按钮标志文件，如果存在则设置 FAILSAFE=true 并显示按钮信息
 		[ -f "/tmp/failsafe_button" ] && FAILSAFE=true && echo "- failsafe button "$(cat /tmp/failsafe_button)" was pressed -"
+		# 如果 FAILSAFE 为 "true"，导出环境变量并创建 /tmp/failsafe 标志文件
 		[ "$FAILSAFE" = "true" ] && export FAILSAFE && touch /tmp/failsafe
 	fi
 }
