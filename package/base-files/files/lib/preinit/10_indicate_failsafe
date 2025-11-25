@@ -15,26 +15,29 @@
 # 	修改主机名
 
 
+# 设置 failsafe 状态灯，会闪烁
 # LED 状态指示，依赖 /etc/diag.sh，会被 openwrt/package/base-files/files/lib/preinit/02_default_set_state.sh 初始化
 indicate_failsafe_led () {
 	set_state failsafe
 }
 
 indicate_failsafe() {
+	# 禁用了 failsafe 模式，直接返回
 	[ "$pi_preinit_no_failsafe" = "y" ] && return
 	# 列出当前活动控制台设备
 	local consoles="$(cat /sys/class/tty/console/active)"
+	# 如果没有活动的 console，默认其为 console
 	[ -n "$consoles" ] || consoles=console
 	# 向所有活动控制台输出警告
 	for console in $consoles; do
 		[ -c "/dev/$console" ] && echo "- failsafe -" >"/dev/$console"
 	done
-	# 网络广播
+	# 向网络广播消息
 	# 定义在 openwrt/package/base-files/files/lib/preinit/10_indicate_preinit
 	preinit_net_echo "Entering Failsafe!\n"
-	# 触发LED指示
+	# 设置 failsafe 状态灯，会闪烁
 	indicate_failsafe_led
-	# 修改主机名
+	# 修改主机名，方便发现机器
 	echo OpenWrt-failsafe > /proc/sys/kernel/hostname
 }
 

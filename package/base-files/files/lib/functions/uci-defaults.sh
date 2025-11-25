@@ -792,17 +792,42 @@ ucidef_set_interface_netdev_range() {
 	fi
 }
 
+# 用于更新或初始化开发板的配置信息
+# 主要处理硬件型号识别和配置文件管理
 board_config_update() {
+	# 初始化JSON解析器的内部状态
+	# 清空之前的JSON数据结构
+	# 准备开始新的JSON操作会话
+	# 由 libubox/sh/jshn.sh 定义
 	json_init
+	# 加载配置文件
+	# CFG 来自调用者，可能为 /etc/board.json 或 /tmp/board.json
+	# 结构为
+	# {
+	# 	"model": {
+	# 		"id": "linksys,wrt3200acm",
+	# 		"name": "Linksys WRT3200ACM"
+	# 	},
+	# 	"network": {
+	# 		"lan": {
+	# 			"ifname": "eth0.1"
+	# 		}
+	# 	}
+	# }
 	[ -f ${CFG} ] && json_load "$(cat ${CFG})"
 
 	# auto-initialize model id and name if applicable
+	# 检查 model 属性是否为对象
 	if ! json_is_a model object; then
+		# 进入 model 对象
 		json_select_object model
 			[ -f "/tmp/sysinfo/board_name" ] && \
+				# 添加 id 属性
 				json_add_string id "$(cat /tmp/sysinfo/board_name)"
 			[ -f "/tmp/sysinfo/model" ] && \
+				# 添加 name 属性，可读的设备名称
 				json_add_string name "$(cat /tmp/sysinfo/model)"
+		# 回退到上级对象
 		json_select ..
 	fi
 }

@@ -10,6 +10,7 @@ preinit_ip_config() {
 	# 提取VLAN ID (如 eth0.100 → 100)
 	vid=${1#*\.}
 
+	# 如果vid等于netdev，说明原接口名中没有点号，eg：$1=eth0
 	if [ "$vid" = "$netdev" ]; then
 		vid=
 	fi
@@ -19,43 +20,100 @@ preinit_ip_config() {
 
 	# 存在 vid 则设置 vlan
 	if [ -n "$vid" ]; then
+		# 创建新的网络接口
+		# ip link add link eth0 name eth0.100 type vlan id 100
+		# ip 命令应该是来自 busyBox，由 BUSYBOX_CONFIG_IP 控制是否启用
 		ip link add link $netdev name $1 type vlan id $vid
 	fi
 
-	# 激活网口
+	# 激活网口,将主接口设置为UP状态
+	# ip link set dev eth0 up
 	ip link set dev $netdev up
 	if [ -n "$vid" ]; then
-		# 启用子接口
+		# 启用VLAN子接口
 		ip link set dev $1 up
 	fi
+	# IP地址配置
+	# 	ip -4 address add：添加IPv4地址
+	# 	$pi_ip/$pi_netmask：IP地址和子网掩码（CIDR格式）
+	# 	broadcast $pi_broadcast：广播地址
+	# 	dev $1：目标设备（可能是主接口或VLAN子接口）
+	# pi_ip 环境变量由 openwrt/package/base-files/Makefile 生成，由 CONFIG_TARGET_PREINIT_IP 指定，默认 192.168.1.1
 	ip -4 address add $pi_ip/$pi_netmask broadcast $pi_broadcast dev $1
 }
 
+# 配置硬件交换机
+# $1 (name)：交换机设备名称（如 "switch0"）
+# $2 (lan_if)：LAN接口名称（如 "eth1"）
+# 使用 swconfig（在 openwrt/package/network/config/swconfig 包中定义） 工具配置硬件交换机，包括：
+# 1. 重置交换机（可选）
+# 2. 启用/禁用VLAN功能
+# 3. 配置VLAN端口映射
+# 4. 应用配置
 preinit_config_switch() {
+	# role：当前处理的VLAN角色/ID
+	# roles：所有VLAN角色的列表
+	# ports：端口配置字符串
+	# device：设备名称
+	# enable：VLAN启用标志
+	# reset：重置标志
 	local role roles ports device enable reset
 
+	# 交换机设备名称
 	local name=$1
+	# LAN接口名称
 	local lan_if=$2
 
+	# {
+	# 	"switch": {
+	# 		"switch0": {
+	# 			"enable": 1,
+	# 			"reset": 1,
+	# 			"roles": {
+	# 				"1": {
+	# 					"device": "eth1",
+	# 					"ports": "0 1 2 3 6t"
+	# 				},
+	# 				"2": {
+	# 					"device": "eth0", 
+	# 					"ports": "4 6t"
+	# 				}
+	# 			}
+	# 		}
+	# 	}
+	# }
 	json_select switch
 	json_select $name
 
+	# enable：是否启用VLAN功能（0或1）
+	# reset：是否在配置前重置交换机（0或1）
 	json_get_vars enable reset
 
+	# 重置交换机，清除所有现有配置，恢复到默认状态
 	if [ "$reset" -eq "1" ]; then
 		swconfig dev $name set reset
 	fi
+	# 配置 VLAN
+	# 启用VLAN，支持端口隔离和标记
+	# 禁用VLAN，所有端口在同一广播域
 	swconfig dev $name set enable_vlan $enable
 
+	# VLAN角色配置
 	if json_is_a roles array; then
 		json_get_keys roles roles
 		json_select roles
 
+		# 遍历所有角色
 		for role in $roles; do
 			json_select "$role"
+			# 端口配置示例
+			# ports="0 1 2 3 6t"
+			# 0,1,2,3: 普通端口（untagged）
+			# 6t: 标记端口（tagged），通常是CPU端口
 			json_get_vars ports device
 			json_select ..
 
+			# lan_if 是调用者传入的，只有指定的接口才操作
 			if [ "$device" = "$lan_if" ]; then
 				swconfig dev $name vlan $role set ports "$ports"
 			fi
@@ -64,28 +122,56 @@ preinit_config_switch() {
 		json_select ..
 	fi
 
+	# 将所有配置写入硬件
 	swconfig dev $name set apply
 
 	json_select ..
 	json_select ..
 }
 
+# 将物理网络设备重命名为指定接口名
+# $1 (netdev)：目标网络接口名称（如 "eth0", "eth1"）
+# $2 (path)：硬件设备在sysfs中的路径（如 "platform/soc/ethernet@70000"）
+# $3 (port)：端口号（可选，用于多端口网络设备）
+# 根据 硬件路径 和 端口号 找到对应的物理网络设备，并将其重命名为指定的接口名称，实现硬件到逻辑接口的映射
 preinit_config_port() {
+	# 存储找到的原始接口名
 	local original
+	# 临时存储设备端口号
 	local dev_port
 
 	local netdev="$1"
 	local path="$2"
 	local port="$3"
 
+	# 检查设备是否存在
+	# 典型的网络设备sysfs结构
+	# /sys/devices/platform/soc/soc:internal-regs/f1070000.ethernet/net/
+	# ├── eth0/                   # 网络接口目录
+	# │   ├── address             # MAC地址
+	# │   ├── dev_port            # 端口号（多端口设备）
+	# │   ├── operstate           # 操作状态
+	# │   ├── mtu                 # MTU大小
+	# │   └── ...
+	# └── eth1/                   # 另一个网络接口（如果是多端口设备）
+	# 	├── address
+	# 	├── dev_port
+	# 	└── ...
 	[ -d "/sys/devices/$path/net" ] || return
 
+	# 未指定端口号的情况
 	if [ -z "$port" ]; then
+		# 取第一个端口
 		original="$(ls "/sys/devices/$path/net" | head -1)"
 	else
+		# 遍历所有网络接口
 		for device in /sys/devices/$path/net/*; do
+			# 读取 dev_port 获取端口号
 			dev_port="$(cat "$device/dev_port")"
+			# 找到指定端口号的接口
 			if [ "$dev_port" = "$port" ]; then
+				# ${device##*/} 表示删除最长匹配的 */ 前缀，仅保留最后一级目录
+				# "/sys/devices/platform/soc/ethernet/net/eth1" -> "eth1"
 				original="${device##*/}"
 				break
 			fi
@@ -94,40 +180,94 @@ preinit_config_port() {
 		[ -z "$original" ] && return
 	fi
 
+	# 如果目标名称与原始名称相同，无需重命名
 	[ "$netdev" = "$original" ] && return
 
+	# 重命名网络接口
 	ip link set "$original" name "$netdev"
 }
 
-# 级网络初始化的核心逻辑，主要完成 网络设备重命名 和 交换机配置
+# 板级网络初始化的核心逻辑，主要完成 网络设备重命名 和 交换机配置
 preinit_config_board() {
+	# 扫描系统硬件信息（CPU、网络芯片、交换机等）
+	# 生成标准化的JSON配置文件
+	# 会执行 /etc/board.d/ 下所有脚本
 	/bin/board_detect /tmp/board.json
 
 	# 没有生成json文件，直接退出
 	[ -f "/tmp/board.json" ] || return
 
+	# 提供 json 支持
 	. /usr/share/libubox/jshn.sh
 
 	json_init
+	# /tmp/board.json
+	# {
+	# 	"model": {
+	# 		"id": "linksys,wrt3200acm",
+	# 		"name": "Linksys WRT3200ACM"
+	# 	},
+	# 	"network_device": {
+	# 		"eth0": {
+	# 			"path": "soc:internal-regs:ethernet@70000",
+	# 			"port": 0
+	# 		},
+	# 		"eth1": {
+	# 			"path": "soc:internal-regs:ethernet@34000", 
+	# 			"port": 1
+	# 		}
+	# 	},
+	# 	"network": {
+	# 		"lan": {
+	# 			"device": "switch0",
+	# 			"ports": ["lan1", "lan2", "lan3", "lan4"]
+	# 		},
+	# 		"wan": {
+	# 			"device": "eth1",
+	# 			"ports": ["wan"]
+	# 		}
+	# 	},
+	# 	"switch": {
+	# 		"switch0": {
+	# 			"enable_vlan": true,
+	# 			"ports": [
+	# 				{"num": 0, "role": "lan"},
+	# 				{"num": 1, "role": "lan"}, 
+	# 				{"num": 2, "role": "lan"},
+	# 				{"num": 3, "role": "lan"},
+	# 				{"num": 5, "role": "cpu"}
+	# 			]
+	# 		}
+	# 	}
+	# }
 	json_load "$(cat /tmp/board.json)"
 
+	# 查找最大eth接口编号
+	# 1. 从 /proc/net/dev 提取 eth 接口
+	# 2. tr -dc '[0-9]\n'：提取数字
+	# 3. 数字排序并取最大值
 	# Find the current highest eth*
 	max_eth=$(grep -o '^ *eth[0-9]*:' /proc/net/dev | tr -dc '[0-9]\n' | sort -n | tail -1)
 	# Find and move netdevs using eth*s we are configuring
+	# 获取对象的所有键名
 	json_get_keys keys "network_device"
+	# 网络设备
 	for netdev in $keys; do
 		json_select "network_device"
 			json_select "$netdev"
 				json_get_vars path path
-				# eth接口冲突，重命名为其他名字
+				# 检查现有设备是否已使用该名字
 				if [ -n "$path" -a -h "/sys/class/net/$netdev" ]; then
+					# 关闭当前设备
 					ip link set "$netdev" down
+					# 因名字冲突，将现有设备重命名为其他名字，最大序号递增
 					ip link set "$netdev" name eth$((++max_eth))
 				fi
 			json_select ..
 		json_select ..
 	done
 
+	# 配置网络设备映射
 	# Move interfaces by path to their netdev name
 	json_get_keys keys "network_device"
 	for netdev in $keys; do
@@ -135,6 +275,7 @@ preinit_config_board() {
 			json_select "$netdev"
 				json_get_vars path path
 				json_get_vars port port
+				# 根据 path 和 port 找到设备，将其接口名修改为 netdev
 				[ -n "$path" ] && preinit_config_port "$netdev" "$path" "$port"
 			json_select ..
 		json_select ..
@@ -142,43 +283,64 @@ preinit_config_board() {
 
 	json_select network
 		json_select "lan"
+			# 传统swconfig模式的设备名
+			# "network": {
+			# 	"lan": {
+			# 		"device": "switch0"
+			# 	}
+			# }
 			json_get_vars device
+			# DSA（Distributed Switch Architecture）模式的端口列表
+			# "network": {
+			# 	"lan": {
+			# 		"ports": ["lan1", "lan2", "lan3", "lan4"]
+			# 	}
+			# }
 			json_get_values ports ports
 		json_select ..
 	json_select ..
 
 	[ -n "$device" -o -n "$ports" ] || return
 
+	# 如果没有ports配置，使用device作为ports
 	# swconfig uses $device and DSA uses ports
 	[ -z "$ports" ] && {
 		ports="$device"
 	}
 
+	# 只使用第一个端口作为预初始化接口
+	# "lan1 lan2 lan3 lan4" -> "lan1"
 	# only use the first one
 	ifname=${ports%% *}
 
+	# 判断是否有 swconfig 工具
 	if [ -x /sbin/swconfig ]; then
 		# configure the switch, if present
 
 		json_get_keys keys switch
 		for key in $keys; do
+			# 配置硬件交换机
 			preinit_config_switch $key $ifname
 		done
 	else
+		# 没有swconfig工具的情况（DSA模式）
+		# 移除VLAN ID, "lan1.100:t" -> "lan1:t"
 		# trim any vlan ids
 		ifname=${ifname%\.*}
+		# 移除修饰符, "lan1:t" -> "lan1"
 		# trim any vlan modifiers like :t
 		ifname=${ifname%\:*}
 	fi
 
 	pi_ifname=$ifname
 
+	# 预初始化网络，设置 IP
 	preinit_ip_config $pi_ifname
 }
 
-# 网络初始化，主要用于在系统启动早期配置网络接口
+# 网络初始化，主要用于在系统启动早期配置网络接口，为 failsafe 模式做准备
 preinit_ip() {
-	# 禁用故障安全模式
+	# 禁用故障安全模式，就不需要初始化了
 	[ "$pi_preinit_no_failsafe" = "y" ] && return
 
 	# 这里是 pi_ifname 的兜底
@@ -189,32 +351,53 @@ preinit_ip() {
 		pi_ifname=$ifname
 	fi
 
+	# 如果指定了 pi_ifname，仅初始化特定设备
 	if [ -n "$pi_ifname" ]; then
 		# 为指定接口应用基础网络配置
 		preinit_ip_config $pi_ifname
 	elif [ -d "/etc/board.d/" ]; then
 		# 执行板级特定配置脚本
+		# 初始化网络设备 和 交换机，并指定为特定的接口名
 		preinit_config_board
 	fi
 
 	preinit_net_echo "Doing OpenWrt Preinit\n"
 }
 
+# 清理预初始化网络配置
+# 之前在 preinit 阶段为了使用网络进行了网络初始化，在 preinit 阶段完成后，需要还原回去
+# 无直接参数，使用全局变量 $pi_ifname（preinit interface name）
 preinit_ip_deconfig() {
+	# [ -n "$pi_ifname" ]：检查预初始化接口名是否非空
+	# grep -q "$pi_ifname" /proc/net/dev：检查接口是否真实存在于系统中
 	[ -n "$pi_ifname" ] && grep -q "$pi_ifname" /proc/net/dev && {
 		local netdev vid
 
+		# 提取基础设备名
+		# % 表示从右边开始删除匹配的最短模式
+		# \. 表示字面意思的点号（转义）
+		# * 表示任意字符
 		netdev=${pi_ifname%\.*}
+		# 提取VLAN ID
+		# # 表示从左边开始删除匹配的最短模式
+		# *\. 表示任意字符直到第一个点号
 		vid=${pi_ifname#*\.}
 
+		# 如果 vid 等于 netdev，说明接口名中没有VLAN标识
 		if [ "$vid" = "$netdev" ]; then
 			vid=
 		fi
 
+		# 清除IP地址
+		# ip -4：只处理IPv4地址
+		# address flush：清除所有IP地址
+		# dev $pi_ifname：指定要清除的网络接口
 		ip -4 address flush dev $pi_ifname
+		# 关闭基础接口
 		ip link set dev $netdev down
 
 		if [ -n "$vid" ]; then
+			# 删除VLAN接口
 			ip link delete $pi_ifname
 		fi
 	}
@@ -238,6 +421,8 @@ preinit_net_echo() {
 					# 是否禁用故障安全模式
 					[ "$pi_preinit_no_failsafe_netmsg" != "y" ]
 			}
+			# netmsg 在 openwrt/package/utils/busybox/patches/210-add_netmsg_util.patch 中添加到 busyBox
+			# 进而添加到系统中
 		} && netmsg $pi_broadcast "$1"
 	}
 }

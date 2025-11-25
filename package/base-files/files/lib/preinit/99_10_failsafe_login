@@ -1,20 +1,53 @@
 # Copyright (C) 2006-2015 OpenWrt.org
 # Copyright (C) 2010 Vertical Communications
 
+# 在故障安全模式下为所有活动控制台启动交互式Shell，确保用户能够通过多种方式访问系统进行故障排除和修复
 failsafe_shell() {
+	# 获取当前活动的控制台设备
 	local consoles="$(cat /sys/class/tty/console/active)"
 	[ -n "$consoles" ] || consoles=console
 	for console in $consoles; do
+		# 终端类型匹配
+		# 终端类型说明
+		# linux终端类型
+		# 	- 支持完整的Linux控制台功能
+		# 	- 颜色支持、光标控制等
+		# 	- 适用于本地VGA控制台
+		#
+		# vt102终端类型
+		# 	- VT102兼容终端
+		# 	- 适用于串口终端、远程连接
+		# 	- 更好的兼容性，但功能相对简单
 		case "$console" in
+			# 标准控制台和VGA终端，使用linux终端类型
 			console|tty[0-9]*)
+				# ${TERM:-linux}：如果TERM环境变量已设置，使用现有值，否则默认使用"linux"
 				term=${TERM:-linux}
 				;;
 			*)
+				# 使用vt102终端类型（更通用的兼容性）
 				term=vt102
 				;;
 		esac
 		# Running asynchronously via the shell's & would ignore SIGINT,
 		# breaking ^C. Use start-stop-daemon instead.
+		# [ -c "/dev/$console" ]：检查控制台设备文件是否存在且为字符设备，只有有效的设备才启动Shell
+		# start-stop-daemon：相较于 & 的后台运行，start-stop-daemon 可以正确处理信号，Ctrl+C可以正常工作
+		# 	-S：启动模式
+		# 	-b：后台运行
+		# 	-p /dev/null：不创建PID文件（使用/dev/null）
+		# 	--：参数分隔符
+		# 	env -i：清空环境变量，提供干净的环境
+		# 	ash -c：执行Shell命令
+		# 		无限循环确保Shell意外退出后自动重启，sleep 1防止快速重启消耗过多资源
+		# 	setsid -c：创建新的会话和进程组，并设置控制终端，确保Shell有独立的会话管理
+		# 环境变量
+		# 	USER=root：当前用户
+		# 	LOGNAME=root：登录名
+		# 	SHELL=/bin/ash：默认Shell
+		# 	TERM="$term"：终端类型
+		# --login：作为登录Shell启动，执行登录脚本
+		# <\"/dev/$console\" >\"/dev/$console\" 2>\"/dev/$console\"：输入输出重定向，标准输入：从控制台设备读取；标准输出：输出到控制台设备；标准错误：重定向到控制台设备
 		[ -c "/dev/$console" ] && start-stop-daemon -Sb -p /dev/null -- env -i ash -c "while true; do setsid -c env -i USER=root LOGNAME=root SHELL=/bin/ash TERM="$term" ash --login <\"/dev/$console\" >\"/dev/$console\" 2>\"/dev/$console\"; sleep 1; done"
 	done
 

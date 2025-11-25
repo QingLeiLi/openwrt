@@ -1,3 +1,9 @@
+# UDP广播消息发送工具
+# - 发送UDP广播消息到指定IP地址
+# - 使用固定端口 0x1337 (4919)
+# - 消息格式：0xde 0xad + 消息内容
+# - 最大消息长度：998字节
+
 --- /dev/null
 +++ b/networking/netmsg.c
 @@ -0,0 +1,76 @@
@@ -7,37 +13,64 @@
 + * This is free software, licensed under the GNU General Public License v2.
 + */
 +
+# 定义配置选项名称
 +//config:config NETMSG
+# 布尔类型选项，在menuconfig中显示为"netmsg"
 +//config:	bool "netmsg"
 +//config:	default n
 +//config:	help
+# 帮助文本，说明这是发送UDP广播消息的简单程序
 +//config:	  simple program for sending udp broadcast messages
 +
+# BusyBox applet定义
+# IF_NETMSG()：只有启用NETMSG配置时才包含
+#   netmsg：命令名称
+#   BB_DIR_BIN：安装到/bin目录
+#   BB_SUID_REQUIRE：需要SUID权限
 +//applet:IF_NETMSG(APPLET(netmsg, BB_DIR_BIN, BB_SUID_REQUIRE))
 +
+# 构建规则：当CONFIG_NETMSG启用时，将netmsg.o链接到库中
 +//kbuild:lib-$(CONFIG_NETMSG) += netmsg.o
 +
+# NOUSAGE_STR：不显示使用说明
 +//usage:#define netmsg_trivial_usage NOUSAGE_STR
+# 完整使用说明为空字符串
 +//usage:#define netmsg_full_usage ""
 +
 +#include <sys/types.h>
+# Socket系统调用，包含socket()、bind()、sendto()等函数声明
 +#include <sys/socket.h>
+# 网络地址结构，包含sockaddr_in、INADDR_ANY等网络相关定义
 +#include <netinet/in.h>
+# 网络数据库函数，包含主机名解析相关函数
 +#include <netdb.h>
 +#include <stdio.h>
+# 标准库函数：包含exit()、内存分配函数等
 +#include <stdlib.h>
+# 字符串处理：包含memset()、strncpy()等字符串函数
 +#include <string.h>
 +#include "busybox.h"
 +
+# 条件编译的函数定义：
+#   如果不是BusyBox编译：使用标准的main()函数
+#   如果是BusyBox编译：使用netmsg_main()函数（BusyBox的applet入口点）
+# 参数：程序名 + IP地址 + 消息
 +#ifndef CONFIG_NETMSG
 +int main(int argc, char **argv)
 +#else
 +int netmsg_main(int argc, char **argv)
 +#endif
 +{
+    # Socket文件描述符：用于存储创建的UDP socket
 +	int s;
+    # 网络地址结构：存储目标IP地址和端口信息
 +	struct sockaddr_in addr;
+    # Socket选项值：用于启用广播选项，值为1表示启用
 +	int optval = 1;
+#   数据缓冲区：
+#       大小1001字节
+#       前2字节存储魔数0xdead
+#       后999字节存储消息内容（实际使用998字节+null终止符）
 +	unsigned char buf[1001];
 +
 +	if (argc != 3) {
@@ -45,27 +78,53 @@
 +		exit(1);
 +	}
 +
+#   创建UDP Socket：
+#       AF_INET：IPv4地址族
+#       SOCK_DGRAM：UDP数据报socket类型
+#       0：协议参数（系统自动选择UDP协议）
 +	if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 +		perror("Opening socket");
 +		exit(1);
 +	}
 +
+#   将整个sockaddr_in结构体清零，确保没有垃圾数据
 +	memset(&addr, 0, sizeof(addr));
+#   设置地址族：指定使用IPv4地址族
 +	addr.sin_family = AF_INET;
+#   设置目标IP地址
+#       inet_addr()：将点分十进制IP字符串转换为网络字节序的32位整数
 +	addr.sin_addr.s_addr = inet_addr(argv[1]);
+#   设置目标端口，始终使用端口4919 (0x1337)
+#       htons()：将主机字节序转换为网络字节序（大端序）
 +	addr.sin_port = htons(0x1337);
 +
+#   将整个1001字节的缓冲区清零
 +	memset(buf, 0, 1001);
+#   设置魔数，用于标识 netmsg 协议的数据包
 +	buf[0] = 0xde;
 +	buf[1] = 0xad;
 +
+#   复制消息内容
 +	strncpy(buf + 2, argv[2], 998);
 +
+#   设置广播选项
+#       s：socket文件描述符
+#       SOL_SOCKET：socket级别的选项
+#       SO_BROADCAST：广播选项
+#       (caddr_t) &optval：选项值的指针（optval=1表示启用）
+#       sizeof(optval)：选项值的大小
 +	if (setsockopt (s, SOL_SOCKET, SO_BROADCAST, (caddr_t) &optval, sizeof (optval)) < 0) {
 +		perror("setsockopt()");
 +		goto fail;
 +	}
 +
+#   发送数据
+#       s：socket文件描述符
+#       buf：要发送的数据缓冲区
+#       1001：发送的字节数（固定发送1001字节）
+#       0：标志位（无特殊标志）
+#       (struct sockaddr *) &addr：目标地址结构指针
+#       sizeof(addr)：地址结构大小
 +	if (sendto(s, buf, 1001, 0, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 +		perror("sendto()");
 +		goto fail;

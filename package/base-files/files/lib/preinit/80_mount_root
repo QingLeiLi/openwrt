@@ -1,16 +1,28 @@
 # Copyright (C) 2006 OpenWrt.org
 # Copyright (C) 2010 Vertical Communications
 
+# 文件行差异检测函数
+# $1 (file1)：源文件（通常是备份的用户信息、passwd文件）
+# $2 (file2)：目标文件（当前系统的用户信息）
+# 用于查找 file1 中存在但 file2 中不存在的行，主要用于合并用户账户信息
 missing_lines() {
 	local file1 file2 line
 	file1="$1"
 	file2="$2"
+	# 保存原始IFS
 	oIFS="$IFS"
+	# 设置 IFS 为冒号分隔符
 	IFS=":"
+	# 逐行读取file1
 	while read line; do
+		# 将行按冒号分割为位置参数
 		set -- $line
+		# $1是用户名或组名（冒号前的第一个字段）
+		# 检查 file2 中是否存在以$1开头的行
+		# 如果不存在，输出整行
 		grep -q "^$1:" "$file2" || echo "$line"
 	done < "$file1"
+	# 恢复原始IFS
 	IFS="$oIFS"
 }
 
@@ -20,12 +32,17 @@ missing_lines() {
 # Example:
 # rootfs_mount_options.compress_algorithm=zstd rootfs_mount_options.noinline_data
 #
+# 根文件系统挂载选项组合函数
+# 从内核命令行参数中提取并组合根文件系统挂载选项
 compose_rootfs_mount_options() {
 	local mount_options
 	local cmdlinevar
 
+	# 读取内核命令行参数
 	for cmdlinevar in $(cat /proc/cmdline); do
+		# 检查参数是否以"rootfs_mount_options."开头
 		if [ "$cmdlinevar" != "${cmdlinevar#rootfs_mount_options\.}" ]; then
+			# 移除前缀并添加到挂载选项
 			append mount_options "${cmdlinevar#rootfs_mount_options\.}"
 		fi
 	done
@@ -33,22 +50,35 @@ compose_rootfs_mount_options() {
 	echo $mount_options
 }
 
+# 根文件系统挂载和配置恢复
 do_mount_root() {
+	# 挂载根文件系统
+	# start参数表示开始挂载操作
 	mount_root start "$(compose_rootfs_mount_options)"
+	# 执行 hook
 	boot_run_hook preinit_mount_root
+	# 检查是否需要恢复配置
+	# /sysupgrade.tgz：系统升级时保存的配置备份
+	# /tmp/sysupgrade.tar：临时配置备份文件
 	[ -f /sysupgrade.tgz -o -f /tmp/sysupgrade.tar ] && {
 		echo "- config restore -"
+		# 拷贝原始文件
 		cp /etc/passwd /etc/group /etc/shadow /tmp
 		cd /
+		# 解压配置文件
 		[ -f /sysupgrade.tgz ] && tar xzf /sysupgrade.tgz
 		[ -f /tmp/sysupgrade.tar ] && tar xf /tmp/sysupgrade.tar
+		# 对比多出来的行，追加到特定文件
 		missing_lines /tmp/passwd /etc/passwd >> /etc/passwd
 		missing_lines /tmp/group /etc/group >> /etc/group
 		missing_lines /tmp/shadow /etc/shadow >> /etc/shadow
 		rm /tmp/passwd /tmp/group /tmp/shadow
 		# Prevent configuration corruption on a power loss
+		# 确保所有数据写入存储设备，防止断电导致的配置损坏
 		sync
 	}
 }
 
+# 只有在非initramfs环境下才注册挂载钩子
+# initramfs环境下根文件系统已经在内存中
 [ "$INITRAMFS" = "1" ] || boot_hook_add preinit_main do_mount_root

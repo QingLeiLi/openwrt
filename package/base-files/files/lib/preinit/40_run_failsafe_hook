@@ -2,10 +2,21 @@
 # Copyright (C) 2010 Vertical Communications
 
 run_failsafe_hook() {
+	# 如果禁用了 failsafe 模式，什么都不做
     [ "$pi_preinit_no_failsafe" = "y" ] && return
+	# 如果触发了 failsafe 模式
     if [ "$FAILSAFE" = "true" ]; then
+	# 创建/tmp/.failsafe锁文件，防止多个进程同时进入故障安全模式
+	# lock命令是OpenWrt的文件锁工具
+	# lock /tmp/.failsafe          # 获取锁，如果已被锁定则等待
+	# lock -n /tmp/.failsafe       # 非阻塞获取锁，失败立即返回
+	# lock -w /tmp/.failsafe       # 等待锁被释放
 	lock /tmp/.failsafe
+	# 执行 hook
 	boot_run_hook failsafe
+	# /tmp/sysupgrade文件：系统升级或重启信号
+	# 当用户在故障安全模式中执行系统升级或重启时创建
+	# 文件存在表示可以退出故障安全模式
 	while [ ! -e /tmp/sysupgrade ]; do
 	    lock -w /tmp/.failsafe
 	done
