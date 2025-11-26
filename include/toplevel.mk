@@ -125,8 +125,9 @@ prepare-tmpinfo: FORCE
 	@+$(MAKE) -r -s $(STAGING_DIR_HOST)/.prereq-build $(PREP_MK)
 	mkdir -p tmp/info feeds
 	# 检查 $(TOPDIR)/feeds/base 是否存在，不存在就从 $(TOPDIR)/feeds/base 链接过来
-	[ -e $(TOPDIR)/feeds/base ] || ln -sf $(TOPDIR)/package $(TOPDIR)/feeds/base
+	# [ -e $(TOPDIR)/feeds/base ] || ln -sf $(TOPDIR)/package $(TOPDIR)/feeds/base
 	# 扫描op自身仓库里面的包,这俩命令都没有声明 TMP_DIR，缓存文件都写到顶层的 tmp 文件夹下了
+	[ -e $(TOPDIR)/feeds/base ] || ln -sf ../package $(TOPDIR)/feeds/base
 	$(_SINGLE)$(NO_TRACE_MAKE) -j1 -r -s -f include/scan.mk SCAN_TARGET="packageinfo" SCAN_DIR="package" SCAN_NAME="package" SCAN_DEPTH=5 SCAN_EXTRA=""
 	$(_SINGLE)$(NO_TRACE_MAKE) -j1 -r -s -f include/scan.mk SCAN_TARGET="targetinfo" SCAN_DIR="target/linux" SCAN_NAME="target" SCAN_DEPTH=3 SCAN_EXTRA="" SCAN_MAKEOPTS="TARGET_BUILD=1"
 	for type in package target; do \
