@@ -2,6 +2,7 @@
 #
 # Copyright (C) 2007-2020 OpenWrt.org
 
+# make 之前设置的环境变量
 PREP_MK= OPENWRT_BUILD= QUIET=0
 
 # MAKE_TERMOUT 是make的内置变量，标识当前是否是终端环境
@@ -272,6 +273,8 @@ download: .config FORCE $(if $(wildcard $(STAGING_DIR_HOST)/bin/flock),,tools/fl
 clean dirclean: .config
 	@+$(SUBMAKE) -r $@
 
+# 使用了 双冒号，允许 prereq 多次定义，独立执行
+# 使用单冒号，多次定义会报错
 prereq:: prepare-tmpinfo .config
 	@+$(NO_TRACE_MAKE) -r -s $@
 
@@ -300,6 +303,8 @@ else
 	# + 表示需要在子进程中执行
 	# -r：不要使用make的一些默认值
 	# -s 不要打印命令
+	# prereq 定义在当前文件里
+	# 会重新加载主 makefile 文件，此时 OPENWRT_BUILD 已经是 1 了，会执行 主Makefile 里的 prereq，和 本文件定义的 prereq（双冒号定义的）
 	@+$(PREP_MK) $(NO_TRACE_MAKE) -r -s prereq
 	@( \
 		cp .config tmp/.config; \

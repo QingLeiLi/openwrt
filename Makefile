@@ -14,7 +14,7 @@ empty:=
 space:= $(empty) $(empty)
 $(if $(findstring $(space),$(TOPDIR)),$(error ERROR: The path to the OpenWrt directory must not include any spaces))
 
-# 定义一个空的目标，只是为了在没有目标的时候执行这个
+# 定义一个空的目标，只是为了在没有目标的时候执行这个，默认占位符
 world:
 
 # grep -e 表示是正则，满足任一 -e 条件的才会被打印出来
