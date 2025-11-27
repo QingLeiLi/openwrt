@@ -3,6 +3,7 @@
 # Copyright (C) 2006-2010 OpenWrt.org
 # Copyright (C) 2016 LEDE Project
 
+# 避免重复引入
 ifneq ($(__rules_inc),1)
 __rules_inc=1
 

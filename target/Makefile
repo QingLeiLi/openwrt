@@ -26,8 +26,13 @@ $(curdir)/imagebuilder/install:=$(curdir)/linux/install
 $(curdir)//compile = $(STAGING_DIR)/.prepared $(BIN_DIR)
 
 # 构建 $$(target/stamp-prereq) 目标
+# 真正的目标名是：$(STAGING_DIR))/stamp/.target_prereq
 $(eval $(call stampfile,$(curdir),target,prereq,.config))
+# 构建 $$(target/stamp-compile) 目标
+# 真正的目标名是：$(STAGING_DIR))/stamp/.target_compile
 $(eval $(call stampfile,$(curdir),target,compile,$(TMP_DIR)/.build))
+# 构建 $$(target/stamp-install) 目标
+# 真正的目标名是：$(STAGING_DIR))/stamp/.target_install
 $(eval $(call stampfile,$(curdir),target,install,$(TMP_DIR)/.build))
 
 $($(curdir)/stamp-install): $($(curdir)/stamp-compile)
