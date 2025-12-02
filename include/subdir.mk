@@ -110,12 +110,32 @@ rebuild_check = \
 endif
 
 # Parameters: <subdir>
+# 用于为指定目录及其子目录生成编译目标和规则
+# $(1) 目录名（如 package、target 等）
+# 当调用 $(call subdir,package) 时，会生成类似这样的规则：
+# 为每个包生成编译规则
+# package/busybox/compile: package/busybox/prepare
+# package/busybox/install: package/busybox/compile
+# package/busybox/clean:
+
+# 带构建类型的规则
+# package/busybox/host/compile: package/busybox/host/prepare
+# package/busybox/target/compile: package/busybox/target/prepare
+
+# 顶层目标
+# package/compile: package/busybox/compile package/other-pkg/compile
+
 define subdir
   $(call warn,$(1),d,D $(1))
   # 由外部指定，builddirs 是子目录
+  # 遍历构建目录，该变量由外部指定
   $(foreach bd,$($(1)/builddirs),
+	# 打印日志
     $(call warn,$(1),d,BD $(1)/$(bd))
+	# 遍历子目标，框架层面通过 SUBTARGETS 指定，调用方通过变量追加
     $(foreach target,$(SUBTARGETS) $($(1)/subtargets),
+	  # 遍历构建类型
+	  # 参数由 openwrt/scripts/package-metadata.pl 生成，根本来源在包的定义
       $(foreach btype,$(buildtypes-$(bd)),
 	  	# warn_eval 会执行第四个参数，T 后面那个
         $(call warn_eval,$(1)/$(bd),t,T,
@@ -129,8 +149,10 @@ define subdir
 				)
 			)
 		)
-		# 执行 make $(btype)-$(target)
-		$(call log_make,$(1)/$(bd),$(target),$(btype),$(filter-out __default,$(variant)),$($(1)/$(bd)/variants)) \
+		  # 这里是 $(1)/$(bd)/$(btype)/$(target) 目标的执行体，不会立即执行
+		  # 执行 make $(btype)-$(target)
+		  # 变体 ？
+		  $(call log_make,$(1)/$(bd),$(target),$(btype),$(filter-out __default,$(variant)),$($(1)/$(bd)/variants)) \
 			# 异常处理
 			|| $(call ERROR,$(2),   ERROR: $(1)/$(bd) [$(btype)] failed to build.,$(findstring $(bd),$($(1)/builddirs-ignore-$(btype)-$(target))))
 		# 这是个依赖处理，以路径的最后一级作为 bd（buildDir） 的别名
@@ -234,6 +256,7 @@ define stampfile
   .PRECIOUS: $$($(1)/stamp-$(3)) # work around a make bug
 
   $(1)//clean:=$(1)/stamp-$(3)/clean
+  # 清理函数
   $(1)/stamp-$(3)/clean: FORCE
 	@rm -f $$($(1)/stamp-$(3))
 

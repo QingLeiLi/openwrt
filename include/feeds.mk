@@ -5,7 +5,7 @@
 
 -include $(TMP_DIR)/.packageauxvars
 
-# 获取 package/feeds 下所有的文件
+# 获取 package/feeds 下所有的文件,作为已安装的 feed
 FEEDS_INSTALLED:=$(notdir $(wildcard $(TOPDIR)/package/feeds/*))
 FEEDS_AVAILABLE:=$(sort $(FEEDS_INSTALLED) $(shell $(SCRIPT_DIR)/feeds list -n 2>/dev/null))
 

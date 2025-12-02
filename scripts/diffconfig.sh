@@ -1,5 +1,6 @@
 #!/bin/sh
 # 没找到 scripts/config/conf 的目标定义，应该是用隐含规则直接编译这个c文件
+# 有 scripts/config/%onf 规则
 make ./scripts/config/conf >/dev/null || { make ./scripts/config/conf; exit 1; }
 # 在 .config 搜索
 # head -n3 是提取前三行

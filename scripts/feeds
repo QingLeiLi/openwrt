@@ -25,6 +25,7 @@ $mkver[0] =~ /^GNU/ or $valid_mk = 0;
 $mkver[1] =~ /^Make/ or $valid_mk = 0;
 
 my ($mkv1, $mkv2) = split /\./, $mkver[2];
+# 至少是 3.81 版本的 make
 ($mkv1 >= 4 || ($mkv1 == 3 && $mkv2 >= 81)) or $valid_mk = 0;
 
 $valid_mk or die "Unsupported version of make found: $mk\n";
@@ -98,6 +99,7 @@ sub parse_file($$) {
 	return 1;
 }
 
+# 优先解析 feeds.conf，不存在则解析 feeds.conf.default
 sub parse_config() {
 	my %name;
 	parse_file("feeds.conf", \%name) or
@@ -905,6 +907,7 @@ sub update {
 
 	# 存储需要被索引的feed
 	my @index_feeds;
+	# @feeds 在文件引用时，就解析配置文件赋值好了
 	foreach my $feed (@feeds) {
 		# my ($type, $name, $src) = @$feed;
 		# $#ARGV == -1 是检查数组是否为空，$#ARGV 是数组的最后一个元素的索引

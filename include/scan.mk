@@ -30,12 +30,15 @@ $(if
 )
 endef
 
-# 根据 target 和 packge 添加不同的makefile文件
+# 根据 target 和 packge 添加不同的 makefile 文件
+# SCAN_DEPS 要作为包构建的参数，传递给 make
 ifeq ($(SCAN_NAME),target)
   SCAN_DEPS=image/Makefile profiles/*.mk $(TOPDIR)/include/kernel*.mk $(TOPDIR)/include/target.mk image/*.mk
 else
   SCAN_DEPS=$(TOPDIR)/include/package*.mk
-# 添加特定 feed 的makefile
+
+# feed 名不为空，添加特定 feed 的makefile
+# 添加 /feeds/luci.mk 这样的文件，用来实现部分自定义
 ifneq ($(call feedname,$(SCAN_DIR)),)
   SCAN_DEPS += $(TOPDIR)/feeds/$(call feedname,$(SCAN_DIR))/*.mk
 endif
@@ -66,21 +69,23 @@ endif
 # $2：dir
 # $3：pkg
 define PackageDir
+  # 声明新的任务，更新依赖关系
   $(TMP_DIR)/.$(SCAN_TARGET): $(TMP_DIR)/info/.$(SCAN_TARGET)-$(1)
+  # 后面复杂的部分：
+  # $(DEPS_$(SCAN_DIR)/$(2)/Makefile) 是一个变量，目标（$(TMP_DIR)/info/.files-$(SCAN_TARGET).mk） 里面通过 awk 生成的
+  # $(SCAN_DEPS) 是拼接的额外依赖，用于 foreach
+  # $(foreach DEP,$(DEPS_$(SCAN_DIR)/$(2)/Makefile) $(SCAN_DEPS),
+  # 	wildcard 用于将路径展开，将路径匹配展开为具体的文件
+  # 	$(wildcard
+  #       这个是处理路径的，绝对路径直接返回，相对路径拼接 SCAN_DIR 和包名
+  # 		$(if
+  # 			$(filter /%,$(DEP)),
+  # 			$(DEP),
+  # 			$(SCAN_DIR)/$(2)/$(DEP)
+  # 		)
+  # 	)
+  # )
   $(TMP_DIR)/info/.$(SCAN_TARGET)-$(1): $(SCAN_DIR)/$(2)/Makefile $(foreach DEP,$(DEPS_$(SCAN_DIR)/$(2)/Makefile) $(SCAN_DEPS),$(wildcard $(if $(filter /%,$(DEP)),$(DEP),$(SCAN_DIR)/$(2)/$(DEP))))
-	# 后面复杂的部分：
-	# $(DEPS_$(SCAN_DIR)/$(2)/Makefile) 是一个变量，目标（$(TMP_DIR)/info/.files-$(SCAN_TARGET).mk） 里面通过 awk 生成的
-	# $(SCAN_DEPS) 是拼接的额外依赖
-	# $(foreach DEP,$(DEPS_$(SCAN_DIR)/$(2)/Makefile) $(SCAN_DEPS),
-	# 	$(wildcard
-	#       这个是处理路径的，绝对路径直接返回，相对路径拼接 SCAN_DIR 和包名
-	# 		$(if
-	# 			$(filter /%,$(DEP)),
-	# 			$(DEP),
-	# 			$(SCAN_DIR)/$(2)/$(DEP)
-	# 		)
-	# 	)
-	# )
 	{ \
 		# 只是打印日志
 		$$(call progress,Collecting $(SCAN_NAME) info: $(SCAN_DIR)/$(2)) \
@@ -90,16 +95,17 @@ define PackageDir
 		# -C 是在指定目录下执行make
 		# 这个if是根据日志级别，选择是 MAKE 还是 NO_TRACE_MAKE
 		# 这里会执行包的 Makefile
+		# make -r DUMP=1 FEED="package" -C /Users/lql/Desktop/source/openwrt/package/base-files
 		$(if $(findstring c,$(OPENWRT_VERBOSE)),$(MAKE),$(NO_TRACE_MAKE) --no-print-dir) -r DUMP=1 FEED="$(call feedname,$(2))" -C $(SCAN_DIR)/$(2) $(SCAN_MAKEOPTS) \
 			# 根据日志级别确定，是否要重定向异常
 			$(if $(findstring c,$(OPENWRT_VERBOSE)),,2>/dev/null) || { \
-			# 失败了，创建日志目录
-			mkdir -p "$(TOPDIR)/logs/$(SCAN_DIR)/$(2)"; \
-			# 重新执行一遍，把日志写过去
-			$(NO_TRACE_MAKE) --no-print-dir -r DUMP=1 FEED="$(call feedname,$(2))" -C $(SCAN_DIR)/$(2) $(SCAN_MAKEOPTS) > $(TOPDIR)/logs/$(SCAN_DIR)/$(2)/dump.txt 2>&1; \
-			$$(call progress,ERROR: please fix $(SCAN_DIR)/$(2)/Makefile - see logs/$(SCAN_DIR)/$(2)/dump.txt for details\n) \
-			rm -f $$@; \
-		}; \
+				# 失败了，创建日志目录
+				mkdir -p "$(TOPDIR)/logs/$(SCAN_DIR)/$(2)"; \
+				# 重新执行一遍，把日志写过去
+				$(NO_TRACE_MAKE) --no-print-dir -r DUMP=1 FEED="$(call feedname,$(2))" -C $(SCAN_DIR)/$(2) $(SCAN_MAKEOPTS) > $(TOPDIR)/logs/$(SCAN_DIR)/$(2)/dump.txt 2>&1; \
+				$$(call progress,ERROR: please fix $(SCAN_DIR)/$(2)/Makefile - see logs/$(SCAN_DIR)/$(2)/dump.txt for details\n) \
+				rm -f $$@; \
+			}; \
 		echo; \
 	} > $$@.tmp
 	mv $$@.tmp $$@
@@ -112,6 +118,7 @@ $(OVERRIDELIST):
 	# 更新时间戳，这里 $@ 代表目标名（$(OVERRIDELIST)），即 $(TMP_DIR)/info/.overrides-$(SCAN_TARGET)-$(SCAN_COOKIE)
 	touch $@
 
+# 根据 SCAN_NAME 来区分 grep 的参数
 ifeq ($(SCAN_NAME),target)
   GREP_STRING=BuildTarget
 else
@@ -119,7 +126,7 @@ else
 endif
 
 # 执行顺序 2
-# FILELIST 存储的是 feed 下所有的包名路径，类似于：
+# FILELIST 存储的是 feed 下所有的包名路径，核心包(不以 feeds 开头)在前，三方包(以 feeds 开头)在后，各自内部按照字母排序，类似于：
 	# libs/bcg729
 	# libs/libosip2
 	# libs/libctb
@@ -128,6 +135,7 @@ endif
 	# libs/sofia-sip
 	# libs/dahdi-linux
 	# libs/re
+# 如果 核心包 和 三方包 同名（最后一级路径），将 核心包输出到 OVERRIDELIST 文件，其他都输出到 FILELIST 文件
 $(FILELIST): $(OVERRIDELIST)
 	rm -f $(TMP_DIR)/info/.files-$(SCAN_TARGET)-*
 	# -L 跟随符号链接
@@ -169,6 +177,7 @@ $(FILELIST): $(OVERRIDELIST)
 	# 去重
 	# 使用 include/scan.awk 处理文件名，文件主要处理了重名的问题，重名的部分包名写入了 OVERRIDELIST 中
 	# 将内容写入到 $(TMP_DIR)/info/.files-$(SCAN_TARGET)-$(SCAN_COOKIE) 文件，-v 是定义变量，-f 是交给独立文件处理
+	# 最后的 > $@ 是将 awk 的输出写入到 FILELIST 指定的文件
 	# FILELIST最终的样子是：
 		# feeds/telephony/sofia-sip
 		# feeds/telephony/spandsp
@@ -179,6 +188,7 @@ $(FILELIST): $(OVERRIDELIST)
 # 执行顺序 3
 # 这是一个所有包的汇总文件
 # cat ./tmp/info/.files-packageinfo.mk
+# 基于 FILELIST 和 OVERRIDELIST 生成所有包的构建脚本
 $(TMP_DIR)/info/.files-$(SCAN_TARGET).mk: $(FILELIST)
 	( \
 		# $< 代表第一个依赖，即 $(FILELIST)
@@ -200,7 +210,7 @@ $(TMP_DIR)/info/.files-$(SCAN_TARGET).mk: $(FILELIST)
 			# package/feeds/telephony/spandsp3/Makefile
 			# package/feeds/telephony/yate/Makefile
 		awk '{print "$(SCAN_DIR)/" $$0 "/Makefile" }' |
-		# 在每个 makefile 中搜索包含 SCAN_DEPS= 的行
+		# 在每个 makefile 中搜索包含 SCAN_DEPS= 的行，如果没有，就不输出 DEPS_ 那一行了
 		# -H 需要包含文件名，-E 使用拓展正则表达式
 		# ^ 表示行的开始、* 表示零个或多个空格、*= * 表示 SCAN_DEPS 后面可能有零个或多个空格
 		# cat ./tmp/info/.files-packageinfo-4731 | awk '{print "package/" $$0 "/Makefile" }' | xargs grep -HE '^ *SCAN_DEPS *= *'
@@ -237,9 +247,12 @@ $(TMP_DIR)/info/.files-$(SCAN_TARGET).mk: $(FILELIST)
 			# 也是整行赋值，是原始值，没有经过替换的
 			dir=$$0; \
 			pkg=""; \
+			# 如果 override 数组中存在这个包名（最后一级路径），说明是重名包，优先使用 override 中的
+			# 这个应该会忽略掉 feeds 下的重名包
 			if($$NF in override) \
 				# override 里存的是包名？
 				pkg=override[$$NF]; \
+			# 拼接出 PackageDir 调用
 			print "$$(eval $$(call PackageDir," info "," dir "," pkg "))"; \
 			# $< 表示第一个依赖，从 FILELIST 读取的
 		} ' < $<; \
@@ -263,8 +276,12 @@ $(TMP_DIR)/info/.files-$(SCAN_TARGET).mk: $(FILELIST)
 
 $(TARGET_STAMP)::
 	+( \
+		执行 FILELIST 目标
 		$(NO_TRACE_MAKE) $(FILELIST); \
+		# 计算 md5
 		MD5SUM=$$(cat $(FILELIST) $(OVERRIDELIST) | $(MKHASH) md5 | awk '{print $$1}'); \
+		# md5 被写到了文件名中，文件存在，说明md5没有变化，不需要更新文件时间
+		# 如果文件不存在，或者 md5 变化了，都会更新时间戳
 		[ -f "$@.$$MD5SUM" ] || { \
 			rm -f $@.*; \
 			touch $@.$$MD5SUM; \
@@ -272,8 +289,16 @@ $(TARGET_STAMP)::
 		} \
 	)
 
+# 将多个文件合并为一个文件 到 $(TMP_DIR)/.$(SCAN_TARGET)
 $(TMP_DIR)/.$(SCAN_TARGET): $(TARGET_STAMP)
 	$(call progress,Collecting $(SCAN_NAME) info: merging...)
+	# 读取 FILELIST 文件的内容
+	# gsub(/\//, "_", $$0) - 将路径中的 / 替换为 _
+		# $$0 在 Makefile 中转义为 $0（整行内容）
+	# print 构造新的文件路径格式
+		# package/kernel/linux -> $(TMP_DIR)/info/.$(SCAN_TARGET)-package_kernel_linux
+	# xargs 将前面的输出作为 cat 命令的参数，会读取上面生成文件路径的内容
+	# > $@ - 将合并后的内容写入目标文件
 	-cat $(FILELIST) | awk '{gsub(/\//, "_", $$0);print "$(TMP_DIR)/info/.$(SCAN_TARGET)-" $$0}' | xargs cat > $@ 2>/dev/null
 	$(call progress,Collecting $(SCAN_NAME) info: done)
 	echo
