@@ -2,9 +2,33 @@
 #
 # Copyright (C) 2006-2020 OpenWrt.org
 
+# 输出大概是这样子：
+# Source-Makefile: feeds/luci/applications/luci-app-acl/Makefile
+# Build-Depends: lua/host luci-base/host LUCI_CSSTIDY:csstidy/host LUCI_SRCDIET:luasrcdiet/host
+
+# Package: luci-app-acl
+# Submenu: 3. Applications
+# Version: x
+# Depends: +libc +luci-base
+# Conflicts:
+# Menu-Depends:
+# Provides:
+# Section: luci
+# Category: LuCI
+# Repository: base
+# Title: LuCI account management module
+# Maintainer: OpenWrt LuCI community
+# Source:
+# License: Apache-2.0
+# URL: https://github.com/openwrt/luci
+# Type: ipkg
+# Description: LuCI account management module
+# @@
+
+
 ifneq ($(DUMP),)
 
-
+# 输出文件级别信息
 define SOURCE_INFO
 $(if $(PKG_BUILD_DEPENDS),Build-Depends: $(PKG_BUILD_DEPENDS)
 )$(if $(HOST_BUILD_DEPENDS),Build-Depends/host: $(HOST_BUILD_DEPENDS)
@@ -13,6 +37,7 @@ $(if $(PKG_BUILD_DEPENDS),Build-Depends: $(PKG_BUILD_DEPENDS)
 
 endef
 
+# 输出包级别信息
 define Dumpinfo/Package
 $(info $(SOURCE_INFO)Package: $(1)
 $(if $(MENU),Menu: $(MENU)

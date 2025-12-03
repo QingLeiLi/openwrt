@@ -89,6 +89,113 @@ sub parse_package_metadata_usergroup($$$$$) {
 sub parse_target_metadata($) {
 	my $file = shift;
 	my ($target, @target, $profile);
+	# {
+	# 	'x86_64': {
+	# 		arch: 'x86_64',
+	# 		arch_packages: 'x86_64',
+	# 		board: 'x86',
+	# 		boardconf: 'x86',
+	# 		cflags: '-Os -pipe',
+	# 		conf: 'x86_64',
+	# 		cputype: ' ',
+	# 		depends: [],
+	# 		desc: 'Build images for 64 bit systems including virtualized guests.',
+	# 		features: [
+	# 			'boot-part'
+	# 			'display'
+	# 			'ext4'
+	# 			'fpu'
+	# 			'gpio'
+	# 			'pci'
+	# 			'pcmcia'
+	# 			'rootfs-part'
+	# 			'rtc'
+	# 			'squashfs'
+	# 			'targz'
+	# 			'usb'
+	# 			'vdi'
+	# 			'vhdx'
+	# 			'vmdk'
+	# 		],
+	# 		has_devices: 1,
+	# 		id: 'x86/64',
+	# 		karch: 'x86',
+	# 		makefile: 'target/linux/x86/Makefile',
+	# 		name: 'x86_64',
+	# 		packages: [
+	# 			'base-files'
+	# 			'ca-bundle'
+	# 			'dropbear'
+	# 			'fstools'
+	# 			'libc'
+	# 			'libgcc'
+	# 			'libustream-mbedtls'
+	# 			'logd'
+	# 			'mtd'
+	# 			'netifd'
+	# 			'uci'
+	# 			'uclient-fetch'
+	# 			'urandom-seed'
+	# 			'urngd'
+	# 			'procd-ujail'
+	# 			'dnsmasq'
+	# 			'firewall4'
+	# 			'nftables'
+	# 			'kmod-nft-offload'
+	# 			'odhcp6c'
+	# 			'odhcpd-ipv6only'
+	# 			'ppp'
+	# 			'ppp-mod-pppoe'
+	# 			'partx-utils'
+	# 			'mkf2fs'
+	# 			'e2fsprogs'
+	# 			'kmod-button-hotplug'
+	# 			'grub2-bios-setup'
+	# 		],
+	# 		parent: {
+	# 			arch=>'i386',
+	# 			// ...
+	# 		},
+	# 		profiles: [
+	# 			{
+	# 				default: 'y if TARGET_ALL_PROFILES',
+	# 				desc: 'Build firmware images for Generic x86/64',
+	# 				has_image_metadata: 0,
+	# 				id: 'DEVICE_generic',
+	# 				name: 'Generic x86/64',
+	# 				packages: [
+	# 					'kmod-amazon-ena',
+	# 					'kmod-amd-xgbe',
+	# 					'kmod-bnx2',
+	# 					'kmod-dwmac-intel',
+	# 					'kmod-e1000e',
+	# 					'kmod-e1000'
+	# 					'kmod-forcedeth'
+	# 					'kmod-fs-vfat'
+	# 					'kmod-igb'
+	# 					'kmod-igc'
+	# 					'kmod-ixgbe'
+	# 					'kmod-r8169'
+	# 					'kmod-tg3'
+	# 					'kmod-drm-i915'
+	# 				],
+	# 				priority: 999,
+	# 				supported_devices: [],
+	# 			}
+	# 		],
+	# 		release: 1,
+	# 		subtarget: 1,
+	# 		// 这是 x86 的 subtargets
+	# 		// subtargets 和 profiles 不能同时存在，就拼接了一下
+	# 		subtargets: [
+	# 			'generic'
+	# 			'legacy'
+	# 			'geode'
+	# 			64
+	# 		],
+	# 		version: '6.12.59',
+	# 	}
+	# }
 	my %target;
 	my $makefile;
 
@@ -201,6 +308,39 @@ sub clear_packages() {
 sub parse_package_metadata($) {
 	my $file = shift;
 	my $pkg;
+	# {
+	# 	'2to3': {
+	# 		builddepends: [],
+	# 		'builddepends/host': ['python3/host'],
+	# 		buildtypes: ['host'],
+	# 		ignore: 'undef',
+	# 		makefile: 'package/feeds/packages/2to3/Makefile',
+	# 		name: '2to3',
+	# 		packages: [
+	# 			{
+	# 				buildonly: 1,
+	# 				category: 'Languages',
+	# 				depends: ['+libc'],
+	# 				description: '2to3 is a Python program that reads Python 2.x source code and applies a series of fixers to transform it into valid Python 3.x code. The standard library contains a rich set of fixers that will handle almost all code. 2to3 supporting library lib2to3 is, however, a flexible and generic library, so it is possible to write your own fixers for 2to3. lib2to3 could also be adapted to custom applications in which Python code needs to be edited automatically.',
+	# 				license: 'PSF-2.0',
+	# 				licensefiles: 'copyright',
+	# 				maintainer: ['Gerald Kerma <gandalf@gk2.net>,Jeffery To <jeffery.to@gmail.com>'],
+	# 				mdepends: [],
+	# 				name: '2to3',
+	# 				override: '',
+	# 				provides: ['2to3'],
+	# 				repository: 'packages',
+	# 				submenu: 'Python',
+	# 				title: '2to3 binary using python3',
+	# 				tristate: 1,
+	# 				type: ['ipkg'],
+	# 				url: 'https://salsa.debian.org/cpython-team/python3-defaults',
+	# 				version: '1.0-r1',
+	# 			},
+	# 		],
+	# 		path: 'feeds/packages/2to3',
+	# 	},
+	# }
 	my $src;
 	my $override;
 	my %ignore = map { $_ => 1 } @ignore;

@@ -6,6 +6,8 @@
 # See /LICENSE for more information.
 #
 
+# 默认目标在 openwrt/include/package.mk 中定义
+
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 include $(INCLUDE_DIR)/version.mk
