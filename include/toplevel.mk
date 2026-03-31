@@ -129,6 +129,7 @@ prepare-tmpinfo: FORCE
 	# [ -e $(TOPDIR)/feeds/base ] || ln -sf $(TOPDIR)/package $(TOPDIR)/feeds/base
 	# 扫描op自身仓库里面的包,这俩命令都没有声明 TMP_DIR，缓存文件都写到顶层的 tmp 文件夹下了
 	[ -e $(TOPDIR)/feeds/base ] || ln -sf ../package $(TOPDIR)/feeds/base
+	# remake V=ssc -j1 -r -s -f include/scan.mk SCAN_TARGET="packageinfo" SCAN_DIR="package" SCAN_NAME="package" SCAN_DEPTH=5 SCAN_EXTRA=""
 	$(_SINGLE)$(NO_TRACE_MAKE) -j1 -r -s -f include/scan.mk SCAN_TARGET="packageinfo" SCAN_DIR="package" SCAN_NAME="package" SCAN_DEPTH=5 SCAN_EXTRA=""
 	$(_SINGLE)$(NO_TRACE_MAKE) -j1 -r -s -f include/scan.mk SCAN_TARGET="targetinfo" SCAN_DIR="target/linux" SCAN_NAME="target" SCAN_DEPTH=3 SCAN_EXTRA="" SCAN_MAKEOPTS="TARGET_BUILD=1"
 	for type in package target; do \
@@ -239,6 +240,7 @@ kernel_nconfig: prepare_kernel_conf
 kernel_xconfig: prepare_kernel_conf
 	$(_SINGLE)$(NO_TRACE_MAKE) -C target/linux xconfig
 
+# mk 作为依赖，会检查新旧判断当前目标是否需要重新 make，不会自动执行
 $(STAGING_DIR_HOST)/.prereq-build: include/prereq-build.mk
 	mkdir -p tmp
 	# 检查了很多环境要求、链接一些库到 $(STAGING_DIR_HOST)/bin 下面
@@ -296,19 +298,41 @@ ifeq ($(SDK),1)
 else
 
 # 这是一条 模式规则（pattern rule）允许通过正则匹配目标名，具有名字的目标叫 具名目标（explicit target），具名目标的优先级最高
+# 如果有具名目标（这个具名目标得有命令，如果是空目标【Makefile中定义的 world 就是空目标】，还是会执行模式匹配），模式规则就不会执行了
 # 会匹配所有非空目标
 # 两个冒号表示，如果有多个同名规则，都会被执行，而不是覆盖
+# case 1 具名目标优先
+# test:
+# 	@echo "执行具名目标 test"
+# %:
+# 	@echo "执行模式规则 $@"
+# case 1 执行 make test，只会输出 "执行具名目标 test"
+
+# case 2 双冒号的模式匹配都会执行
+# test::
+# 	@echo "执行具名目标 test"
+# %::
+# 	@echo "执行模式规则 $@"
+# case 2 会都执行，输出
+# 执行具名目标 test
+# 执行模式规则 test
+
+# 这里应该是没有具名目标的任务都要遵循的规则，即：先 prereq、再 准备 config、再执行具名目标
 %::
-	# @ 用于不展示该命令，简化日志
+	# @ 用于不展示该命令，只显示输出结果，简化日志
 	# + 表示需要在子进程中执行
 	# -r：不要使用make的一些默认值
 	# -s 不要打印命令
 	# prereq 定义在当前文件里
-	# 会重新加载主 makefile 文件，此时 OPENWRT_BUILD 已经是 1 了，会执行 主Makefile 里的 prereq，和 本文件定义的 prereq（双冒号定义的）
+	# 【这是不对的】会重新加载主 makefile 文件，此时 OPENWRT_BUILD 已经是 1 了，会执行 主Makefile 里的 prereq，和 本文件定义的 prereq（双冒号定义的）
+	# 这里的 PREP_MK 包含了 OPENWRT_BUILD=，OPENWRT_BUILD 设置为空，还是会走原来的逻辑
 	@+$(PREP_MK) $(NO_TRACE_MAKE) -r -s prereq
 	@( \
 		cp .config tmp/.config; \
+		# defconfig：默认配置文件
+		# -w：写入到指定文件
 		./scripts/config/conf $(KCONF_FLAGS) --defconfig=tmp/.config -w tmp/.config Config.in > /dev/null 2>&1; \
+		# 比较配置文件差异
 		if ./scripts/kconfig.pl '>' .config tmp/.config | grep -q CONFIG; then \
 			printf "$(_R)WARNING: your configuration is out of sync. Please run make menuconfig, oldconfig or defconfig!$(_N)\n" >&2; \
 		fi \

@@ -162,10 +162,15 @@ static bool randomize_choice_values(struct symbol *csym)
 }
 
 enum conf_def_mode {
+	// 将所有未配置的选项设置为它们在 Kconfig 文件中定义的默认值
 	def_default,
+	// 所有选项设为 yes
 	def_yes,
+	// 所有选项设为 module (m)
 	def_mod,
+	// 所有选项设为 no
 	def_no,
+	// 随机设置选项值，通过 pby、pty、ptm 设置概率
 	def_random
 };
 
@@ -177,13 +182,22 @@ static bool conf_set_all_new_symbols(enum conf_def_mode mode)
 	 * can't go as the default in switch-case below, otherwise gcc whines
 	 * about -Wmaybe-uninitialized
 	 */
+	// 布尔yes概率
 	int pby = 50; /* probability of bool     = y */
+	// 三态yes概率
 	int pty = 33; /* probability of tristate = y */
+	// 三态module概率
 	int ptm = 33; /* probability of tristate = m */
 	bool has_changed = false;
 
+	// 如果是随机模式，将 KCONFIG_PROBABILITY 环境变量的值更新到局部变量
 	if (mode == def_random) {
 		int n, p[3];
+		// 从环境变量读取自定义概率
+		// KCONFIG_PROBABILITY 格式可以是：
+		// "50"       - 只设置pby
+		// "33:33"    - 设置pty和ptm
+		// "50:25:25" - 设置pby:pty:ptm
 		char *env = getenv("KCONFIG_PROBABILITY");
 
 		n = 0;
@@ -229,11 +243,17 @@ static bool conf_set_all_new_symbols(enum conf_def_mode mode)
 
 	sym_clear_all_valid();
 
+	// 设置初始值
+	// 只处理了值为 S_BOOLEAN 和 S_TRISTATE 类型
 	for_all_symbols(i, sym) {
+		// 跳过已有值或已验证的符号
 		if (sym_has_value(sym) || sym->flags & SYMBOL_VALID)
 			continue;
+		// 只处理布尔和三态类型
 		switch (sym_get_type(sym)) {
+		// 只能是 y/n
 		case S_BOOLEAN:
+		// 可以是 y/m/n
 		case S_TRISTATE:
 			has_changed = true;
 			switch (mode) {
@@ -250,11 +270,13 @@ static bool conf_set_all_new_symbols(enum conf_def_mode mode)
 				sym->def[S_DEF_USER].tri = no;
 				cnt = rand() % 100;
 				if (sym->type == S_TRISTATE) {
+					// 三态符号：根据概率选择 y/m/n
 					if (cnt < pty)
 						sym->def[S_DEF_USER].tri = yes;
 					else if (cnt < pty + ptm)
 						sym->def[S_DEF_USER].tri = mod;
 				} else if (cnt < pby)
+					// 布尔符号：根据概率选择 y/n
 					sym->def[S_DEF_USER].tri = yes;
 				break;
 			default:
@@ -287,6 +309,7 @@ static bool conf_set_all_new_symbols(enum conf_def_mode mode)
 	}
 
 	for_all_symbols(i, csym) {
+		// 专门处理 choice，不是 choice 直接跳过
 		if (sym_has_value(csym) || !sym_is_choice(csym))
 			continue;
 
@@ -800,7 +823,7 @@ int main(int ac, char **av)
 			default:
 				break;
 			}
-			// 这个会覆盖吧，只能指定一个？
+			// 这个会覆盖吧，只能指定一个？最后一个？
 			input_mode = input_mode_opt;
 		default:
 			break;

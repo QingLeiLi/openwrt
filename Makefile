@@ -198,6 +198,7 @@ ifneq ($(CONFIG_CCACHE),)
 	$(STAGING_DIR_HOST)/bin/ccache -s
 endif
 
+# .PHONY = 告诉 make "这个目标不是文件，永远执行它的 recipe"
 .PHONY: clean dirclean prereq prepare world package/symlinks package/symlinks-install package/symlinks-clean
 
 endif
