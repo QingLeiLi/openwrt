@@ -25,6 +25,7 @@ END {
 	n = asort(PKGS)
 	for (i=1; i <= n; i++) {
 		# 这个只是打印，并没有输出到 of 文件
+		# 打印的内容会被调用这个 awk 脚本的处理，一般是写入另外一个文件了
 		print PKGS[i]
 	}
 	n = asort(FEEDS)

@@ -10,11 +10,13 @@
 #	4: find options
 
 # find命令的公共参数，-x 不是一个合法标识，只是一个占位符，后续会在使用时被替换为 -and -not -path
+# 定义了一组 find 命令的参数，用于排除特定路径和文件模式（如 .svn 目录、隐藏文件、临时文件等）
 DEP_FINDPARAMS := -x "*/.svn*" -x ".*" -x "*:*" -x "*\!*" -x "* *" -x "*\\\#*" -x "*/.*_check" -x "*/.*.swp" -x "*/.pkgdir*"
 
 # 第一个参数是 文件夹路径，表示在哪里找文件
 # 第二个参数是 文件匹配规则，要找谁
 # 整体功能：在 $(1) 文件夹下找到命中 $(2) 的文件，然后对文件名和修改时间戳计算md5
+# 使用 find 命令查找文件，排除指定路径，计算每个文件的 MD5 哈希值，并按时间戳排序
 
 # wildcard 用来匹配文件列表，类似 glob，将文件夹中文件都罗列出来
 # find 命令用来查找文件，-type f 表示只查找文件，-printf 也是find的参数，"%p%T@\n" 表示输出文件名和修改时间（秒级时间戳）
@@ -24,6 +26,7 @@ find_md5=find $(wildcard $(1)) -type f $(patsubst -x,-and -not -path,$(DEP_FINDP
 # -print0 是 find 的一个选项，用于输出以空字符（null character）分隔的文件名，null character 是个特殊字符（\0），不是空格
 # xargs -0 $(MKHASH) md5：xargs 接收到find的输出后，将输出按照 null character 切割，然后传给 MKHASH 计算 md5，得到的是多个md5值
 
+# 类似于 find_md5，但使用 xargs 和 -print0 选项，确保处理文件名中包含特殊字符的情况。
 # 函数名中的 reproducible 应该是针对文件列表的，计算hash的时候没有算时间戳，所以，只要文件没有增删，应该就是一样的
 # 整体功能，从 $1 中匹配出 $2 文件，依次计算文件名的md5，然后排序，再计算一次md5
 find_md5_reproducible=find $(wildcard $(1)) -type f $(patsubst -x,-and -not -path,$(DEP_FINDPARAMS) $(2)) -print0 | xargs -0 $(MKHASH) md5 | sort | $(MKHASH) md5
@@ -97,3 +100,6 @@ ifeq (
     $(2): $(2)_check
   endef
 endif
+
+# demo：假设有一个目标文件 output.o，依赖于源文件目录 src
+# $(eval $(call rdep,src,output.o,output.md5))

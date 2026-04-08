@@ -3,6 +3,7 @@
 # Copyright (C) 2006-2020 OpenWrt.org
 
 # OpenWrt包构建系统的主要框架文件，定义了如何编译、安装和打包软件包。
+# 包被规范化为一套通用目标和流水线：download → prepare → configure → compile → install（staging）→ 打包（由其他 include 负责）
 
 # 设置一个标志变量，表示这个package.mk文件已经被包含，用于一些能力检测吧，包含了这个文件，就可以使用 package.mk 定义的功能
 __package_mk:=1
@@ -16,7 +17,7 @@ include $(INCLUDE_DIR)/download.mk
 # 包构建目录
 # BUILD_DIR    变种目录       包名      版本后缀
 PKG_BUILD_DIR ?= $(BUILD_DIR)/$(if $(BUILD_VARIANT),$(PKG_NAME)-$(BUILD_VARIANT)/)$(PKG_NAME)$(if $(PKG_VERSION),-$(PKG_VERSION))
-# 包安装目录
+# 包安装目录，临时的安装根目录，用于打包
 PKG_INSTALL_DIR ?= $(PKG_BUILD_DIR)/ipkg-install
 # 并行构建设置，默认为空，由外部指定
 PKG_BUILD_PARALLEL ?=
@@ -40,14 +41,14 @@ endif
 
 # 存储构建标志
 PKG_BUILD_FLAGS?=
-# 构建标志验证，白名单机制
+# 构建标志验证，白名单机制，只接受这几个特定的标志
 __unknown_flags=$(filter-out no-iremap no-mips16 gc-sections no-gc-sections lto no-lto no-mold,$(PKG_BUILD_FLAGS))
 # 如果有未知标志，报错退出
 ifneq ($(__unknown_flags),)
   $(error unknown PKG_BUILD_FLAGS: $(__unknown_flags))
 endif
 
-# 标志处理函数
+# 统一解析开关优先级（no- 优先禁用，其次显式启用，否则用默认）
 # 如果 PKG_BUILD_FLAGS 中存在 no-<flag>，则返回 0，
 # 如果存在 <flag>，则返回 1
 # 否则返回 $2 默认值

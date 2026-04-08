@@ -10,7 +10,7 @@ SCAN_TARGET ?= packageinfo
 SCAN_NAME ?= package
 SCAN_DIR ?= package
 TARGET_STAMP:=$(TMP_DIR)/info/.files-$(SCAN_TARGET).stamp
-# SCAN_COOKIE 是 ./scripts/feeds 设置的pid
+# SCAN_COOKIE 是 ./scripts/feeds 或 toplevel 设置的pid，在环境变量里
 FILELIST:=$(TMP_DIR)/info/.files-$(SCAN_TARGET)-$(SCAN_COOKIE)
 OVERRIDELIST:=$(TMP_DIR)/info/.overrides-$(SCAN_TARGET)-$(SCAN_COOKIE)
 
@@ -32,6 +32,7 @@ endef
 
 # 根据 target 和 packge 添加不同的 makefile 文件
 # SCAN_DEPS 要作为包构建的参数，传递给 make
+# 扫描 target 的时候，需要检查以下文件是否变化
 ifeq ($(SCAN_NAME),target)
   SCAN_DEPS=image/Makefile profiles/*.mk $(TOPDIR)/include/kernel*.mk $(TOPDIR)/include/target.mk image/*.mk
 else
@@ -56,6 +57,9 @@ ifeq ($(IS_TTY),1)
   endif
 else
   define progress
+    # : - shell 的内置命令，什么都不做（no-op）
+	# ; - 命令分隔符
+	# 整体效果：一个什么都不做的命令
 	:;
   endef
 endif
@@ -65,9 +69,12 @@ endif
 # 	applications_luci-app-acl,
 # 	applications/luci-app-acl,
 # ))
-# $1：info
-# $2：dir
+# $1：包名，由路径转换而来，可以认为是唯一标识
+# $2：dir，包相对于 scan dir 的路径
 # $3：pkg
+
+# 为每个扫描生成一个任务名：$(TMP_DIR)/info/.$(SCAN_TARGET)-$(1)
+# 总任务是 $(TMP_DIR)/.$(SCAN_TARGET)，每个扫描任务都完成了，才能执行总任务
 define PackageDir
   # 声明新的任务，更新依赖关系
   $(TMP_DIR)/.$(SCAN_TARGET): $(TMP_DIR)/info/.$(SCAN_TARGET)-$(1)
@@ -77,7 +84,7 @@ define PackageDir
   # $(foreach DEP,$(DEPS_$(SCAN_DIR)/$(2)/Makefile) $(SCAN_DEPS),
   # 	wildcard 用于将路径展开，将路径匹配展开为具体的文件
   # 	$(wildcard
-  #       这个是处理路径的，绝对路径直接返回，相对路径拼接 SCAN_DIR 和包名
+  #       这个是处理路径的，绝对路径直接返回，相对路径拼接 SCAN_DIR 和包路径
   # 		$(if
   # 			$(filter /%,$(DEP)),
   # 			$(DEP),
@@ -85,16 +92,18 @@ define PackageDir
   # 		)
   # 	)
   # )
+  # 这个任务是为了向目标名写入内容的，生成文件
   $(TMP_DIR)/info/.$(SCAN_TARGET)-$(1): $(SCAN_DIR)/$(2)/Makefile $(foreach DEP,$(DEPS_$(SCAN_DIR)/$(2)/Makefile) $(SCAN_DEPS),$(wildcard $(if $(filter /%,$(DEP)),$(DEP),$(SCAN_DIR)/$(2)/$(DEP))))
 	{ \
 		# 只是打印日志
 		$$(call progress,Collecting $(SCAN_NAME) info: $(SCAN_DIR)/$(2)) \
 		# 输出内容：Source-Makefile: feeds/luci/libs/luci-lib-ip/Makefile
 		echo Source-Makefile: $(SCAN_DIR)/$(2)/Makefile; \
+		# 如果 $(3) 存在，输出 `Override: $(3)`; 否则什么都不做，true 只是保证表达式反正正确的退出码
 		$(if $(3),echo Override: $(3),true); \
 		# -C 是在指定目录下执行make
 		# 这个if是根据日志级别，选择是 MAKE 还是 NO_TRACE_MAKE
-		# 这里会执行包的 Makefile
+		# 这里会执行每个包的 Makefile，指定为 DUMP 模式
 		# make -r DUMP=1 FEED="package" -C /Users/lql/Desktop/source/openwrt/package/base-files
 		$(if $(findstring c,$(OPENWRT_VERBOSE)),$(MAKE),$(NO_TRACE_MAKE) --no-print-dir) -r DUMP=1 FEED="$(call feedname,$(2))" -C $(SCAN_DIR)/$(2) $(SCAN_MAKEOPTS) \
 			# 根据日志级别确定，是否要重定向异常
@@ -126,7 +135,7 @@ else
 endif
 
 # 执行顺序 2
-# FILELIST 存储的是 feed 下所有的包名路径，核心包(不以 feeds 开头)在前，三方包(以 feeds 开头)在后，各自内部按照字母排序，类似于：
+# FILELIST 存储的是 feed 下所有的包的相对路径，核心包(不以 feeds 开头)在前，三方包(以 feeds 开头)在后，各自内部按照字母排序，类似于：
 	# libs/bcg729
 	# libs/libosip2
 	# libs/libctb
@@ -226,7 +235,7 @@ $(TMP_DIR)/info/.files-$(SCAN_TARGET).mk: $(FILELIST)
 				# DEPS_package/firmware/linux-firmware/Makefile=*.mk
 				# DEPS_package/kernel/linux/Makefile=modules/*.mk $(SUBTARGET_MODULES) $(TOPDIR)/include/netfilter.mk
 		awk -F: '{ gsub(/^.*DEPS *= */, "", $$2); print "DEPS_" $$1 "=" $$2 }'; \
-		# 上面这个awk的作用是输出 DEPS_文件名=依赖，到目标文件里面了
+		# 上面这个awk的作用是输出 DEPS_文件名=依赖，到目标文件里面了，定义了一个变量
 
 		# 下面这个 awk 并没有直接收到上面的管道，是在最下面用 $< 传过去的
 		# -F 设置字段分割符
@@ -271,7 +280,8 @@ $(TMP_DIR)/info/.files-$(SCAN_TARGET).mk: $(FILELIST)
 
 # -include 表示要 include，但是如果文件不存在，也不要报错
 # 因为这里是include了一个目标名，第一次执行时文件不存在，make会执行上面的 $(TMP_DIR)/info/.files-$(SCAN_TARGET).mk 目标，来生成该文件
-# mk文件被生成吼，开始被 include，里面的 eval 会被执行
+# mk文件被生成后，开始被 include，里面的 eval 会被执行
+# /openwrt/tmp/info/.files-packageinfo.mk
 -include $(TMP_DIR)/info/.files-$(SCAN_TARGET).mk
 
 $(TARGET_STAMP)::

@@ -324,7 +324,7 @@ else
 	# -r：不要使用make的一些默认值
 	# -s 不要打印命令
 	# prereq 定义在当前文件里
-	# 【这是不对的】会重新加载主 makefile 文件，此时 OPENWRT_BUILD 已经是 1 了，会执行 主Makefile 里的 prereq，和 本文件定义的 prereq（双冒号定义的）
+	# 【这行是不对的】会重新加载主 makefile 文件，此时 OPENWRT_BUILD 已经是 1 了，会执行 主Makefile 里的 prereq，和 本文件定义的 prereq（双冒号定义的）
 	# 这里的 PREP_MK 包含了 OPENWRT_BUILD=，OPENWRT_BUILD 设置为空，还是会走原来的逻辑
 	@+$(PREP_MK) $(NO_TRACE_MAKE) -r -s prereq
 	@( \
