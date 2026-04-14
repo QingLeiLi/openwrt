@@ -32,6 +32,7 @@ ifeq ($(DUMP),)
         $(_pkg_target)compile: $(PKG_BUILD_DIR)/.pkgdir/$(1).installed
         compile: install-bin-$(1)
       else
+        # 未启用的包打印日志
         compile: $(1)-disabled
         $(1)-disabled:
 		@echo "WARNING: skipping $(1) -- package not selected" >&2
@@ -40,16 +41,21 @@ ifeq ($(DUMP),)
     endif
 
     $(PKG_BUILD_DIR)/.pkgdir/$(1).installed: $(STAMP_BUILT)
+    # $@ 是自动变量，表示“当前规则的目标文件名”
+    # 清理旧目录 和 标识
 		rm -rf $(PKG_BUILD_DIR)/.pkgdir/$(1) $$@
 		mkdir -p $(PKG_BUILD_DIR)/.pkgdir/$(1)
+    # 执行包的 install 命令，将文件安装到临时根
 		$(call Package/$(1)/install,$(PKG_BUILD_DIR)/.pkgdir/$(1))
+    # touch 产生 .installed 标记
 		touch $$@
 
     install-bin-$(1): $(PKG_BUILD_DIR)/.pkgdir/$(1).installed
 	rm -rf $(BIN_DIR)/$(1)
   # rmdir 前面有 “-”，失败不报错
-  # 只有空目录会被 rmdir 成功，下面检查 -d 是否为目录，如果为空，会被删掉，跳过复制
+  # 只有空目录会被 rmdir 成功（因为没有 -f），下面检查 -d 是否为目录，如果为空，会被删掉，跳过复制
 	-rmdir $(PKG_BUILD_DIR)/.pkgdir/$(1) >/dev/null 2>/dev/null
+  # 如果目录仍存在（说明有内容），则把其内容复制走
 	if [ -d $(PKG_BUILD_DIR)/.pkgdir/$(1) ]; then \
 		$(INSTALL_DIR) $(BIN_DIR)/$(1) && \
 		$(CP) $(PKG_BUILD_DIR)/.pkgdir/$(1)/. $(BIN_DIR)/$(1)/; \

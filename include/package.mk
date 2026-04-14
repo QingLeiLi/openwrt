@@ -262,6 +262,11 @@ include $(INCLUDE_DIR)/package-bin.mk
 # autotools支持
 include $(INCLUDE_DIR)/autotools.mk
 
+# 目标名前缀，用来把一组包相关的规则挂到正确的命名空间下
+# $(_pkg_target)prepare → 展开为 package/xx/prepare
+# $(_pkg_target)compile → 展开为 package/xx/compile
+# $(_pkg_target)install → 展开为 package/xx/install
+# $(_pkg_target)clean → 展开为 package/xx/clean
 # 如果使用QUILT则为空，否则为"."
 _pkg_target:=$(if $(QUILT),,.)
 
